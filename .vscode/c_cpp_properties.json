@@ -10,6 +10,11 @@
             "includePath": [
                 "/home/jlaustill/code/oct/include",
                 "/home/jlaustill/code/oct/src",
+                "/home/jlaustill/code/oct/.pio/libdeps/teensymm/FlexCAN_T4",
+                "/home/jlaustill/code/oct/.pio/libdeps/teensymm/J1939/include",
+                "/home/jlaustill/code/oct/.pio/libdeps/teensymm/J1939/src",
+                "/home/jlaustill/code/oct/.pio/libdeps/teensymm/sea-dash/include",
+                "/home/jlaustill/code/oct/.pio/libdeps/teensymm/sea-dash/src",
                 "/home/jlaustill/.platformio/packages/framework-arduinoteensy/cores/teensy4",
                 "/home/jlaustill/.platformio/packages/framework-arduinoteensy/libraries/ADC",
                 "/home/jlaustill/.platformio/packages/framework-arduinoteensy/libraries/AccelStepper/src",
@@ -117,6 +122,11 @@
                 "path": [
                     "/home/jlaustill/code/oct/include",
                     "/home/jlaustill/code/oct/src",
+                    "/home/jlaustill/code/oct/.pio/libdeps/teensymm/FlexCAN_T4",
+                    "/home/jlaustill/code/oct/.pio/libdeps/teensymm/J1939/include",
+                    "/home/jlaustill/code/oct/.pio/libdeps/teensymm/J1939/src",
+                    "/home/jlaustill/code/oct/.pio/libdeps/teensymm/sea-dash/include",
+                    "/home/jlaustill/code/oct/.pio/libdeps/teensymm/sea-dash/src",
                     "/home/jlaustill/.platformio/packages/framework-arduinoteensy/cores/teensy4",
                     "/home/jlaustill/.platformio/packages/framework-arduinoteensy/libraries/ADC",
                     "/home/jlaustill/.platformio/packages/framework-arduinoteensy/libraries/AccelStepper/src",

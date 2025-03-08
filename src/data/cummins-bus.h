@@ -3,6 +3,7 @@
 
 #include <FlexCAN_T4.h>
 #include "j1939-bus.h"
+#include <J1939Message.h>
 
 class CumminsBus {
     public:
@@ -11,6 +12,21 @@ class CumminsBus {
 
     private:
         static void CumminsBusSniff(const CAN_message_t &msg);
+        static void UpdateMaxTiming();
+
+        volatile static float timing;
+        volatile static uint8_t throttlePercent;
+        volatile static uint8_t load;
+        volatile static uint16_t rpms;
+        volatile static J1939Message message;
+
+        // tuning data
+        volatile static float maxTiming;
+        volatile static int maxOfThrottleAndLoad;
+        volatile static float newTiming;
+        volatile static unsigned short shortTimingValue;
+        volatile static int16_t waterTemp;
+        volatile static boolean warmedUp;
 };
 
 #endif // CUMMINS_BUS_H

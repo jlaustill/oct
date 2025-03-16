@@ -231,7 +231,7 @@
                 ]
             },
             "defines": [
-                "PLATFORMIO=60117",
+                "PLATFORMIO=60118",
                 "__IMXRT1062__",
                 "ARDUINO_TEENSY_MICROMOD",
                 "USB_SERIAL",

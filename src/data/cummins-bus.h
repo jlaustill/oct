@@ -15,6 +15,7 @@ class CumminsBus {
         static void UpdateMaxTiming();
 
         volatile static float timing;
+        volatile static float fuel;
         volatile static uint8_t throttlePercent;
         volatile static uint8_t load;
         volatile static uint16_t rpms;
@@ -22,9 +23,12 @@ class CumminsBus {
 
         // tuning data
         volatile static float maxTiming;
+        volatile static float maxFuel;
         volatile static int maxOfThrottleAndLoad;
         volatile static float newTiming;
-        volatile static unsigned short shortTimingValue;
+        volatile static float newFuel;
+        volatile static uint32_t shortTimingValue;
+        volatile static uint32_t shortFuelValue;
         volatile static int16_t waterTemp;
         volatile static boolean warmedUp;
 };

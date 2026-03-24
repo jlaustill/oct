@@ -75,6 +75,11 @@ struct AppData {
 
     // VI - PGN 65260 (on request)
     StringValue vin;
+
+    // ET1 - PGN 65262 (future: broadcast 1s)
+    FloatValue coolantTemp;     // degrees C
+    FloatValue batteryVoltage;  // volts
+    FloatValue ambientTemp;     // degrees C
 };
 
 #endif // APP_DATA_H

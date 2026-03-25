@@ -5,8 +5,8 @@
 #include "app-data.h"
 
 // Pin assignments (swapped from schematic net names due to board wiring)
-#define J1850VPW_RX 14
-#define J1850VPW_TX 15
+#define J1850VPW_RX 15
+#define J1850VPW_TX 14
 
 // PCI message IDs
 #define PCI_MSG_PCM_ENGINE  0x10
@@ -17,6 +17,8 @@
 class PciBus {
     public:
         static void setup(AppData* appData);
+        static volatile uint32_t _msgCount;
+        static volatile uint32_t _errCount;
 
     private:
         static AppData* _appData;

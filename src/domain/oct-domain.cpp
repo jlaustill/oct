@@ -54,6 +54,12 @@ void OctDomain::loop() {
         Serial.print(ambient, 1);
         Serial.print("C");
 
+        // PCI bus stats
+        Serial.print(" | PCI msgs:");
+        Serial.print(PciBus::_msgCount);
+        Serial.print(" errs:");
+        Serial.print(PciBus::_errCount);
+
         // Staleness indicators
         if (appData.engineRpm.isStale(2000)) Serial.print(" [RPM STALE]");
         if (appData.vehicleSpeed.isStale(2000)) Serial.print(" [SPEED STALE]");

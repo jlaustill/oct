@@ -4,6 +4,8 @@
 #include "pci-bus.h"
 
 AppData* PciBus::_appData = nullptr;
+volatile uint32_t PciBus::_msgCount = 0;
+volatile uint32_t PciBus::_errCount = 0;
 
 void PciBus::setup(AppData* appData) {
     _appData = appData;
@@ -19,6 +21,19 @@ void PciBus::setup(AppData* appData) {
 }
 
 void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
+    _msgCount++;
+
+    // // DEBUG: uncomment to print raw PCI messages
+    // Serial.print("PCI RX [");
+    // Serial.print(messageLength);
+    // Serial.print("]: ");
+    // for (uint8_t i = 0; i < messageLength; i++) {
+    //     if (message[i] < 0x10) Serial.print("0");
+    //     Serial.print(message[i], HEX);
+    //     Serial.print(" ");
+    // }
+    // Serial.println();
+
     if (_appData == nullptr) return;
 
     switch (message[0]) {

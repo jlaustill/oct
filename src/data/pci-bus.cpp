@@ -80,6 +80,41 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
             break;
         }
 
+        // 0xF0: Vehicle Identification Number (5 segments)
+        case PCI_MSG_VIN: {
+            if (messageLength < 4) break;
+
+            // Sub-ID in byte 1 determines VIN segment offset
+            // F0 01: positions 0-1   (2 chars)
+            // F0 02: positions 1-4   (4 chars, overlaps pos 1)
+            // F0 06: positions 5-8   (4 chars)
+            // F0 0A: positions 9-12  (4 chars)
+            // F0 0E: positions 13-16 (4 chars)
+            uint8_t subId = message[1];
+            int offset = -1;
+            int count = 0;
+
+            switch (subId) {
+                case 0x01: offset = 0;  count = 2; break;
+                case 0x02: offset = 1;  count = 4; break;
+                case 0x06: offset = 5;  count = 4; break;
+                case 0x0A: offset = 9;  count = 4; break;
+                case 0x0E: offset = 13; count = 4; break;
+            }
+
+            if (offset >= 0 && messageLength >= (uint8_t)(2 + count)) {
+                // Build VIN into a local buffer, then update atomically
+                char vin[18];
+                _appData->vin.read(vin, 18);
+                for (int i = 0; i < count && (offset + i) < 17; i++) {
+                    vin[offset + i] = (char)message[2 + i];
+                }
+                vin[17] = '\0';
+                _appData->vin.update(vin);
+            }
+            break;
+        }
+
         default:
             break;
     }
@@ -87,7 +122,9 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
 
 void PciBus::onError(J1850VPW_Operations op, J1850VPW_Errors err) {
     if (err == J1850VPW_OK) return;
+    if (err == J1850VPW_ERR_IFR_NOT_SUPPORTED) return; // expected, ignore
 
+    _errCount++;
     const char* opStr = (op == J1850VPW_Read) ? "RX" : "TX";
     Serial.print("PCI ");
     Serial.print(opStr);

@@ -21,17 +21,26 @@ AppData OctDomain::appData = {
 };
 
 uint32_t lastDebugPrint = 0;
+uint32_t lastEEC1Broadcast = 0;
 
 void OctDomain::setup() {
     Serial.begin(115200);
-    J1939Bus::setup();
-    CumminsBus::setup();
+    J1939Bus::setup(&appData);
+    CumminsBus::setup(&appData);
     PciBus::setup(&appData);
+    Serial.println("OCT: all buses initialized, EEC1 broadcasting at 100ms");
 }
 
 void OctDomain::loop() {
-    // Debug: print AppData every 1 second
     uint32_t now = millis();
+
+    // Broadcast PGN 61444 (EEC1) every 100ms per J1939 spec
+    if (now - lastEEC1Broadcast >= 100) {
+        lastEEC1Broadcast = now;
+        J1939Bus::broadcastEEC1();
+    }
+
+    // Debug: print AppData every 1 second
     if (now - lastDebugPrint >= 1000) {
         lastDebugPrint = now;
 
@@ -54,15 +63,19 @@ void OctDomain::loop() {
         Serial.print(ambient, 1);
         Serial.print("C");
 
-        // PCI bus stats
-        Serial.print(" | PCI msgs:");
-        Serial.print(PciBus::_msgCount);
-        Serial.print(" errs:");
-        Serial.print(PciBus::_errCount);
+        // VIN
+        char vin[18];
+        appData.vin.read(vin, 18);
+        if (vin[0] != '\0') {
+            Serial.print(" | VIN:");
+            Serial.print(vin);
+        }
 
-        // Staleness indicators
-        if (appData.engineRpm.isStale(2000)) Serial.print(" [RPM STALE]");
-        if (appData.vehicleSpeed.isStale(2000)) Serial.print(" [SPEED STALE]");
+        // Bus stats
+        Serial.print(" | PCI:");
+        Serial.print(PciBus::_msgCount);
+        Serial.print(" CAN3:");
+        Serial.print(CumminsBus::msgCount);
 
         Serial.println();
     }

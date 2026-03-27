@@ -10,6 +10,7 @@
             "includePath": [
                 "/home/linux/code/oct/include",
                 "/home/linux/code/oct/src",
+                "/home/linux/code/oct/.pio/libdeps/teensymm/J1850VPWCore/src",
                 "/home/linux/code/oct/.pio/libdeps/teensymm/FlexCAN_T4",
                 "/home/linux/code/oct/.pio/libdeps/teensymm/J1939/include",
                 "/home/linux/code/oct/.pio/libdeps/teensymm/J1939/src",
@@ -122,6 +123,7 @@
                 "path": [
                     "/home/linux/code/oct/include",
                     "/home/linux/code/oct/src",
+                    "/home/linux/code/oct/.pio/libdeps/teensymm/J1850VPWCore/src",
                     "/home/linux/code/oct/.pio/libdeps/teensymm/FlexCAN_T4",
                     "/home/linux/code/oct/.pio/libdeps/teensymm/J1939/include",
                     "/home/linux/code/oct/.pio/libdeps/teensymm/J1939/src",

@@ -3,7 +3,7 @@
 
 #include "cummins-bus.h"
 
-FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> CumminsBus::CumminsBusCan;
+FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> CumminsBus::CumminsBusCan;
 AppData* CumminsBus::_appData = nullptr;
 volatile uint32_t CumminsBus::msgCount = 0;
 

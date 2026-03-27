@@ -3,8 +3,8 @@
 
 #include "data/app-data.h"
 
-#define CUMMINS_BUS CAN3
-#define J1939_BUS CAN2
+#define CUMMINS_BUS CAN2
+#define J1939_BUS CAN3
 
 class OctDomain {
     public:

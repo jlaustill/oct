@@ -21,27 +21,52 @@ AppData OctDomain::appData = {
 };
 
 uint32_t lastDebugPrint = 0;
-uint32_t lastEEC1Broadcast = 0;
+uint32_t lastFastBroadcast = 0;   // 100ms: EEC1, CCVS
+uint32_t lastSlowBroadcast = 0;   // 1s: VD, EH
+uint32_t lastVinBroadcast = 0;    // 5s: VI
 
 void OctDomain::setup() {
     Serial.begin(115200);
+    Serial.println("OCT: starting...");
     J1939Bus::setup(&appData);
+    Serial.println("OCT: J1939 bus (CAN3/CAN_A pins 30/31) initialized");
     CumminsBus::setup(&appData);
+    Serial.println("OCT: Cummins bus (CAN2/CAN_B) initialized");
     PciBus::setup(&appData);
-    Serial.println("OCT: all buses initialized, EEC1 broadcasting at 100ms");
+    Serial.println("OCT: PCI bus initialized");
+    Serial.println("OCT: sending address claim...");
+    J1939Bus::sendAddressClaim();
+    Serial.println("OCT: all PGNs broadcasting on J1939");
 }
 
 void OctDomain::loop() {
+    // Process FlexCAN events (frees TX mailboxes after transmission)
+    J1939Bus::J1939BusCan.events();
+    CumminsBus::CumminsBusCan.events();
+
+    // Process TP BAM multi-packet responses (50ms between packets)
+    J1939Bus::processTpBam();
+
     uint32_t now = millis();
 
-    // Broadcast PGN 61444 (EEC1) every 100ms per J1939 spec
-    if (now - lastEEC1Broadcast >= 100) {
-        lastEEC1Broadcast = now;
+    // 100ms broadcasts: EEC1, CCVS
+    if (now - lastFastBroadcast >= 100) {
+        lastFastBroadcast = now;
         J1939Bus::broadcastEEC1();
+        J1939Bus::broadcastCCVS();
     }
 
-    // Debug: print AppData every 1 second
-    if (now - lastDebugPrint >= 1000) {
+    // 1s broadcasts: VD, EH
+    if (now - lastSlowBroadcast >= 1000) {
+        lastSlowBroadcast = now;
+        J1939Bus::broadcastVD();
+        J1939Bus::broadcastEH();
+    }
+
+    // VIN broadcast handled on-request by J1939Bus::onReceive
+
+    // Debug: print AppData every 2 seconds
+    if (now - lastDebugPrint >= 2000) {
         lastDebugPrint = now;
 
         float rpm, speed, coolant, battery, ambient;
@@ -63,7 +88,6 @@ void OctDomain::loop() {
         Serial.print(ambient, 1);
         Serial.print("C");
 
-        // VIN
         char vin[18];
         appData.vin.read(vin, 18);
         if (vin[0] != '\0') {
@@ -71,11 +95,8 @@ void OctDomain::loop() {
             Serial.print(vin);
         }
 
-        // Bus stats
         Serial.print(" | PCI:");
         Serial.print(PciBus::_msgCount);
-        Serial.print(" CAN3:");
-        Serial.print(CumminsBus::msgCount);
 
         Serial.println();
     }

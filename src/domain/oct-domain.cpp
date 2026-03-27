@@ -24,9 +24,9 @@ AppData OctDomain::appData = {
 };
 
 uint32_t lastDebugPrint = 0;
-uint32_t lastFastBroadcast = 0;   // 100ms: EEC1, CCVS
-uint32_t lastSlowBroadcast = 0;   // 1s: VD, EH
-uint32_t lastVinBroadcast = 0;    // 5s: VI
+uint32_t lastFastBroadcast = 0;    // 100ms: EEC1, CCVS
+uint32_t lastSlowBroadcast = 0;    // 1s: VD, EH
+uint32_t lastOdometerRequest = 0;  // 1s: PCM odometer via PCI
 
 void OctDomain::setup() {
     Serial.begin(115200);
@@ -66,7 +66,25 @@ void OctDomain::loop() {
         J1939Bus::broadcastEH();
     }
 
-    // VIN broadcast handled on-request by J1939Bus::onReceive
+    // 1s: request PCM odometer via PCI diagnostic
+    if (now - lastOdometerRequest >= 1000) {
+        lastOdometerRequest = now;
+        PciBus::requestOdometer();
+    }
+
+    // Log diagnostic responses from PCI (printed from loop, not ISR)
+    if (PciBus::_diagResponseReady) {
+        PciBus::_diagResponseReady = false;
+        Serial.print("PCI DIAG [");
+        Serial.print(PciBus::_diagResponseLen);
+        Serial.print("]: ");
+        for (uint8_t i = 0; i < PciBus::_diagResponseLen; i++) {
+            if (PciBus::_diagResponseBuf[i] < 0x10) Serial.print("0");
+            Serial.print(PciBus::_diagResponseBuf[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+    }
 
     // Debug: print AppData every 2 seconds
     if (now - lastDebugPrint >= 2000) {
@@ -90,6 +108,22 @@ void OctDomain::loop() {
         Serial.print("V | Ambient:");
         Serial.print(ambient, 1);
         Serial.print("C");
+
+        float load, oilP, intakeT, odo;
+        appData.engineLoad.read(load);
+        appData.oilPressure.read(oilP);
+        appData.intakeAirTemp.read(intakeT);
+        appData.totalVehicleDistance.read(odo);
+
+        Serial.print(" | Load:");
+        Serial.print(load, 1);
+        Serial.print("% | Oil:");
+        Serial.print(oilP, 0);
+        Serial.print("kPa | IAT:");
+        Serial.print(intakeT, 1);
+        Serial.print("C | Odo:");
+        Serial.print(odo, 1);
+        Serial.print("km");
 
         char vin[18];
         appData.vin.read(vin, 18);

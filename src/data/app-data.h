@@ -80,6 +80,11 @@ struct AppData {
     FloatValue coolantTemp;     // degrees C
     FloatValue batteryVoltage;  // volts
     FloatValue ambientTemp;     // degrees C
+
+    // Additional PCI data
+    FloatValue engineLoad;      // %
+    FloatValue oilPressure;     // kPa
+    FloatValue intakeAirTemp;   // degrees C
 };
 
 #endif // APP_DATA_H

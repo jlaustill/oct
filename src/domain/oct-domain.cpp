@@ -17,7 +17,10 @@ AppData OctDomain::appData = {
     .vin = {{'\0'}, "VIN", 0},
     .coolantTemp = {0.0f, "C", 0},
     .batteryVoltage = {0.0f, "V", 0},
-    .ambientTemp = {0.0f, "C", 0}
+    .ambientTemp = {0.0f, "C", 0},
+    .engineLoad = {0.0f, "%", 0},
+    .oilPressure = {0.0f, "kPa", 0},
+    .intakeAirTemp = {0.0f, "C", 0}
 };
 
 uint32_t lastDebugPrint = 0;

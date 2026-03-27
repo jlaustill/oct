@@ -90,20 +90,11 @@ void OctDomain::loop() {
     if (now - lastDebugPrint >= 2000) {
         lastDebugPrint = now;
 
-        float rpm, speed, coolant, battery, ambient;
-        appData.engineRpm.read(rpm);
-        appData.vehicleSpeed.read(speed);
-        appData.coolantTemp.read(coolant);
+        float battery, ambient;
         appData.batteryVoltage.read(battery);
         appData.ambientTemp.read(ambient);
 
-        Serial.print("RPM:");
-        Serial.print(rpm, 0);
-        Serial.print(" | Speed:");
-        Serial.print(speed, 1);
-        Serial.print("km/h | Coolant:");
-        Serial.print(coolant, 1);
-        Serial.print("C | Batt:");
+        Serial.print("Batt:");
         Serial.print(battery, 2);
         Serial.print("V | Ambient:");
         Serial.print(ambient, 1);

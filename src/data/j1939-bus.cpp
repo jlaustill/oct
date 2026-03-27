@@ -97,14 +97,7 @@ void J1939Bus::broadcastEEC1() {
         msg.buf[4] = (rpmRaw >> 8) & 0xFF;
     }
 
-    int result = J1939BusCan.write(msg);
-    static uint32_t lastWriteLog = 0;
-    uint32_t now = millis();
-    if (now - lastWriteLog >= 2000) {
-        lastWriteLog = now;
-        Serial.print("J1939 EEC1 write: ");
-        Serial.println(result);
-    }
+    J1939BusCan.write(msg);
 }
 
 // PGN 65265 - CCVS (100ms)

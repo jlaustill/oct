@@ -51,6 +51,10 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
             float speedKmh = speedRaw / 128.0f;
             _appData->vehicleSpeed.update(speedKmh);
 
+            // Byte 5: Engine load (raw 0-255 → 0-100%)
+            float loadPct = (message[5] / 255.0f) * 100.0f;
+            _appData->engineLoad.update(loadPct);
+
             break;
         }
 
@@ -65,6 +69,14 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
             // Byte 1: Battery voltage (0.0625V/bit)
             float batteryV = message[1] * 0.0625f;
             _appData->batteryVoltage.update(batteryV);
+
+            // Byte 2: Oil pressure (0.5 PSI/bit → kPa)
+            float oilKpa = message[2] * 0.5f * 6.895f;
+            _appData->oilPressure.update(oilKpa);
+
+            // Byte 4: Intake air temp (Celsius, offset -40)
+            float intakeC = message[4] - 40.0f;
+            _appData->intakeAirTemp.update(intakeC);
 
             break;
         }

@@ -6,6 +6,9 @@
 AppData* PciBus::_appData = nullptr;
 volatile uint32_t PciBus::_msgCount = 0;
 volatile uint32_t PciBus::_errCount = 0;
+volatile bool PciBus::_diagResponseReady = false;
+volatile uint8_t PciBus::_diagResponseBuf[12] = {0};
+volatile uint8_t PciBus::_diagResponseLen = 0;
 
 void PciBus::setup(AppData* appData) {
     _appData = appData;
@@ -14,10 +17,16 @@ void PciBus::setup(AppData* appData) {
     VPW.onError(onError);
     VPW.begin(J1850VPW_RX, J1850VPW_TX, ACTIVE_HIGH);
 
-    // Only listen for messages we can decode
-    uint8_t filter[] = { PCI_MSG_PCM_ENGINE, PCI_MSG_MULTI_SENSOR, PCI_MSG_AMBIENT_TEMP, PCI_MSG_VIN };
+    // Null-terminated filter array (J1850VPWCore iterates with while(*ids))
+    uint8_t filter[] = { PCI_MSG_PCM_ENGINE, PCI_MSG_DIAG_RESPONSE, PCI_MSG_MULTI_SENSOR, PCI_MSG_AMBIENT_TEMP, PCI_MSG_VIN, 0x00 };
     VPW.ignoreAll();
     VPW.listen(filter);
+}
+
+// Send PCM odometer diagnostic request — call from loop(), NOT ISR
+void PciBus::requestOdometer() {
+    uint8_t request[] = { 0x24, 0x10, 0x3C, 0x01, 0x05, 0x00 };
+    VPW.write(request, 6);
 }
 
 void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
@@ -123,6 +132,27 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
                 }
                 vin[17] = '\0';
                 _appData->vin.update(vin);
+            }
+            break;
+        }
+
+        // 0x64: Diagnostic response (echo of 0x24 request)
+        case PCI_MSG_DIAG_RESPONSE: {
+            // Copy to volatile buffer for loop() to log (not ISR-safe to print here)
+            _diagResponseLen = (messageLength < 12) ? messageLength : 12;
+            for (uint8_t i = 0; i < _diagResponseLen; i++) {
+                _diagResponseBuf[i] = message[i];
+            }
+            _diagResponseReady = true;
+
+            // Decode PCM odometer response: 64-10-3C-01-XX-XX-XX-XX
+            if (messageLength >= 8 && message[1] == 0x10 && message[2] == 0x3C && message[3] == 0x01) {
+                // 4-byte odometer at bytes 4-7, big-endian (to be verified in-truck)
+                uint32_t rawOdo = ((uint32_t)message[4] << 24) | ((uint32_t)message[5] << 16) |
+                                  ((uint32_t)message[6] << 8) | (uint32_t)message[7];
+                // DRB: raw is miles, convert to km
+                float km = rawOdo * 1.609344f;
+                _appData->totalVehicleDistance.update(km);
             }
             break;
         }

@@ -9,16 +9,23 @@
 #define J1850VPW_TX 14
 
 // PCI message IDs
-#define PCI_MSG_PCM_ENGINE  0x10
+#define PCI_MSG_PCM_ENGINE   0x10
+#define PCI_MSG_DIAG_RESPONSE 0x64
 #define PCI_MSG_MULTI_SENSOR 0xC0
 #define PCI_MSG_AMBIENT_TEMP 0xCD
-#define PCI_MSG_VIN         0xF0
+#define PCI_MSG_VIN          0xF0
 
 class PciBus {
     public:
         static void setup(AppData* appData);
+        static void requestOdometer();
         static volatile uint32_t _msgCount;
         static volatile uint32_t _errCount;
+
+        // Volatile buffer for logging diagnostic responses from loop() (not ISR)
+        static volatile bool _diagResponseReady;
+        static volatile uint8_t _diagResponseBuf[12];
+        static volatile uint8_t _diagResponseLen;
 
     private:
         static AppData* _appData;

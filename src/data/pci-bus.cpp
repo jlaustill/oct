@@ -23,27 +23,33 @@ void PciBus::setup(AppData* appData) {
     VPW.listen(filter);
 }
 
-// Send PCM odometer diagnostic request — call from loop(), NOT ISR
-// Cycles through different target addresses to find the right module
+// Send odometer diagnostic request — call from loop(), NOT ISR
+// Cycles through different modules and services to find odometer
 void PciBus::requestOdometer() {
     static uint8_t attempt = 0;
 
-    switch (attempt % 3) {
+    switch (attempt % 4) {
         case 0: {
-            // Original: target 0x10 (standard PCM address)
-            uint8_t req[] = { 0x24, 0x10, 0x3C, 0x01, 0x05, 0x00 };
+            // ABS module (0x28), service 0x22, PID 0x30, sub 0x01
+            uint8_t req[] = { 0x24, 0x28, 0x22, 0x30, 0x01, 0x00 };
             VPW.write(req, 6);
             break;
         }
         case 1: {
-            // Try target 0x00 (CM848D uses 0x00 on J1939)
-            uint8_t req[] = { 0x24, 0x00, 0x3C, 0x01, 0x05, 0x00 };
+            // PCM (0x10), service 0x3C
+            uint8_t req[] = { 0x24, 0x10, 0x3C, 0x01, 0x05, 0x00 };
             VPW.write(req, 6);
             break;
         }
         case 2: {
-            // Try functional broadcast (0xFE = all modules)
-            uint8_t req[] = { 0x24, 0xFE, 0x3C, 0x01, 0x05, 0x00 };
+            // MIC/cluster (0x60), service 0x22, ODO/TRIP
+            uint8_t req[] = { 0x24, 0x60, 0x22, 0x36, 0x01, 0x00 };
+            VPW.write(req, 6);
+            break;
+        }
+        case 3: {
+            // Transmission (0x18), service 0x21, TCC mileage
+            uint8_t req[] = { 0x24, 0x18, 0x21, 0x1C, 0x01, 0x00 };
             VPW.write(req, 6);
             break;
         }

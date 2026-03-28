@@ -10,6 +10,49 @@ volatile uint32_t CumminsBus::msgCount = 0;
 void CumminsBus::setup(AppData* appData) {
     _appData = appData;
 
+    // Baud scan: try 250k then 500k
+    uint32_t baudRates[] = {250000, 500000};
+    for (int i = 0; i < 2; i++) {
+        CumminsBusCan.begin();
+        CumminsBusCan.setBaudRate(baudRates[i]);
+        CumminsBusCan.setMaxMB(16);
+        CumminsBusCan.enableFIFO();
+        CumminsBusCan.enableFIFOInterrupt();
+        CumminsBusCan.onReceive(onReceive);
+
+        // Send a test request and check if it gets ACKed
+        CAN_message_t test;
+        test.id = 0x18EAFFFA;
+        test.flags.extended = true;
+        test.len = 3;
+        test.buf[0] = 0xEE;  // PGN 65262 (ET1)
+        test.buf[1] = 0xFE;
+        test.buf[2] = 0x00;
+
+        delay(100);
+        int result = CumminsBusCan.write(test);
+        delay(50);
+        CumminsBusCan.events();
+        delay(10);
+        CumminsBusCan.events();
+        int result2 = CumminsBusCan.write(test);
+
+        Serial.print("Cummins baud scan ");
+        Serial.print(baudRates[i]);
+        Serial.print(": write=");
+        Serial.print(result);
+        Serial.print(" second=");
+        Serial.println(result2);
+
+        if (result2 == 1) {
+            Serial.print("Cummins: using ");
+            Serial.print(baudRates[i]);
+            Serial.println(" bps");
+            return;
+        }
+    }
+
+    Serial.println("Cummins: WARNING - no ACK, defaulting to 250k");
     CumminsBusCan.begin();
     CumminsBusCan.setBaudRate(250000);
     CumminsBusCan.setMaxMB(16);
@@ -36,7 +79,7 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
     msgCount++;
 
     // DEBUG: print raw CAN messages
-    Serial.print("CAN3 RX ID:0x");
+    Serial.print("CUMMINS RX ID:0x");
     Serial.print(msg.id, HEX);
     Serial.print(" [");
     Serial.print(msg.len);
@@ -51,20 +94,45 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
     if (_appData == nullptr) return;
 
     // Parse J1939 PGN from CAN ID
+    // For PDU2 (pduFormat >= 0xF0): PGN = pduFormat << 8 | pduSpecific
+    // For PDU1 (pduFormat < 0xF0): PGN = pduFormat << 8 (pduSpecific is destination)
     J1939Message j1939;
     j1939.setCanId(msg.id);
-    j1939.setData(msg.buf);
 
-    switch (j1939.pgn) {
-        // ET1 - Engine Temperature 1
+    uint32_t pgn = (j1939.pduFormat >= 0xF0)
+        ? ((uint32_t)j1939.pduFormat << 8) | j1939.pduSpecific
+        : ((uint32_t)j1939.pduFormat << 8);
+
+    switch (pgn) {
+        // PGN 65248 (0xFEE0) - Vehicle Distance
+        case 65248: {
+            // Byte 4-7: Total Vehicle Distance, 0.125 km/bit
+            uint32_t distRaw = (uint32_t)msg.buf[4] | ((uint32_t)msg.buf[5] << 8) |
+                               ((uint32_t)msg.buf[6] << 16) | ((uint32_t)msg.buf[7] << 24);
+            float km = distRaw * 0.125f;
+            _appData->totalVehicleDistance.update(km);
+            Serial.print("CUMMINS odometer: ");
+            Serial.print(km, 1);
+            Serial.println(" km");
+            break;
+        }
+
+        // PGN 65262 (0xFEEE) - Engine Temperature 1
         case 65262: {
             float coolantC = (float)msg.buf[0] - 40.0f;
             _appData->coolantTemp.update(coolantC);
             break;
         }
 
-        // EEC2 - Accelerator Pedal
-        case 61443: {
+        // PGN 65253 (0xFEE5) - Engine Hours
+        case 65253: {
+            uint32_t hoursRaw = (uint32_t)msg.buf[0] | ((uint32_t)msg.buf[1] << 8) |
+                                ((uint32_t)msg.buf[2] << 16) | ((uint32_t)msg.buf[3] << 24);
+            float hours = hoursRaw * 0.05f;
+            _appData->engineTotalHours.update(hours);
+            Serial.print("CUMMINS hours: ");
+            Serial.print(hours, 1);
+            Serial.println(" hrs");
             break;
         }
 

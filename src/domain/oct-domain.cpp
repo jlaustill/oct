@@ -24,9 +24,9 @@ AppData OctDomain::appData = {
 };
 
 uint32_t lastDebugPrint = 0;
-uint32_t lastFastBroadcast = 0;    // 100ms: EEC1, CCVS
-uint32_t lastSlowBroadcast = 0;    // 1s: VD, EH
-uint32_t lastOdometerRequest = 0;  // 1s: PCM odometer via PCI
+uint32_t lastFastBroadcast = 0;     // 100ms: EEC1, CCVS
+uint32_t lastSlowBroadcast = 0;     // 1s: VD, EH
+uint32_t lastCumminsRequest = 0;    // 2s: cycle through Cummins PGN requests
 
 void OctDomain::setup() {
     Serial.begin(115200);
@@ -66,13 +66,18 @@ void OctDomain::loop() {
         J1939Bus::broadcastEH();
     }
 
-    // PCM odometer request disabled — no module responds to diagnostic
-    // requests (tried 0x10, 0x00, 0xFE). Odometer will come from Cummins
-    // CAN bus once termination resistors are installed.
-    // if (now - lastOdometerRequest >= 1000) {
-    //     lastOdometerRequest = now;
-    //     PciBus::requestOdometer();
-    // }
+    // 2s: request PGNs from Cummins ECU (CM848D only responds to requests)
+    if (now - lastCumminsRequest >= 2000) {
+        lastCumminsRequest = now;
+        static uint8_t cumminsReqIdx = 0;
+        uint32_t pgns[] = {65248, 65262, 65253, 65265, 65260};
+        uint8_t numPgns = sizeof(pgns) / sizeof(pgns[0]);
+        CumminsBus::requestPgn(pgns[cumminsReqIdx % numPgns]);
+        cumminsReqIdx++;
+
+        // Also probe PCI for odometer from ABS/PCM/MIC/TCM
+        PciBus::requestOdometer();
+    }
 
     // Log diagnostic responses from PCI (printed from loop, not ISR)
     if (PciBus::_diagResponseReady) {

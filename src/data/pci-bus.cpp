@@ -18,7 +18,7 @@ void PciBus::setup(AppData* appData) {
     VPW.begin(J1850VPW_RX, J1850VPW_TX, ACTIVE_HIGH);
 
     // Null-terminated filter array (J1850VPWCore iterates with while(*ids))
-    uint8_t filter[] = { PCI_MSG_PCM_ENGINE, PCI_MSG_DIAG_RESPONSE, PCI_MSG_MULTI_SENSOR, PCI_MSG_AMBIENT_TEMP, PCI_MSG_VIN, 0x00 };
+    uint8_t filter[] = { PCI_MSG_PCM_ENGINE, PCI_MSG_DIAG_RESPONSE, PCI_MSG_ODOMETER, PCI_MSG_MULTI_SENSOR, PCI_MSG_AMBIENT_TEMP, PCI_MSG_VIN, 0x00 };
     VPW.ignoreAll();
     VPW.listen(filter);
 }
@@ -161,6 +161,21 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
                 vin[17] = '\0';
                 _appData->vin.update(vin);
             }
+            break;
+        }
+
+        // 0x72: Odometer broadcast (expected while driving)
+        case PCI_MSG_ODOMETER: {
+            // Log raw bytes — format unknown, decode once we see it
+            Serial.print("PCI ODO [");
+            Serial.print(messageLength);
+            Serial.print("]: ");
+            for (uint8_t i = 0; i < messageLength; i++) {
+                if (message[i] < 0x10) Serial.print("0");
+                Serial.print(message[i], HEX);
+                Serial.print(" ");
+            }
+            Serial.println();
             break;
         }
 

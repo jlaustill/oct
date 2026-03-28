@@ -13,6 +13,7 @@
 #define PCI_MSG_DIAG_RESPONSE 0x64
 #define PCI_MSG_MULTI_SENSOR 0xC0
 #define PCI_MSG_AMBIENT_TEMP 0xCD
+#define PCI_MSG_ODOMETER     0x72
 #define PCI_MSG_VIN          0xF0
 
 class PciBus {

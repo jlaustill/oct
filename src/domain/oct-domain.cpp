@@ -66,11 +66,13 @@ void OctDomain::loop() {
         J1939Bus::broadcastEH();
     }
 
-    // 1s: request PCM odometer via PCI diagnostic
-    if (now - lastOdometerRequest >= 1000) {
-        lastOdometerRequest = now;
-        PciBus::requestOdometer();
-    }
+    // PCM odometer request disabled — no module responds to diagnostic
+    // requests (tried 0x10, 0x00, 0xFE). Odometer will come from Cummins
+    // CAN bus once termination resistors are installed.
+    // if (now - lastOdometerRequest >= 1000) {
+    //     lastOdometerRequest = now;
+    //     PciBus::requestOdometer();
+    // }
 
     // Log diagnostic responses from PCI (printed from loop, not ISR)
     if (PciBus::_diagResponseReady) {

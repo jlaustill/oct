@@ -24,9 +24,31 @@ void PciBus::setup(AppData* appData) {
 }
 
 // Send PCM odometer diagnostic request — call from loop(), NOT ISR
+// Cycles through different target addresses to find the right module
 void PciBus::requestOdometer() {
-    uint8_t request[] = { 0x24, 0x10, 0x3C, 0x01, 0x05, 0x00 };
-    VPW.write(request, 6);
+    static uint8_t attempt = 0;
+
+    switch (attempt % 3) {
+        case 0: {
+            // Original: target 0x10 (standard PCM address)
+            uint8_t req[] = { 0x24, 0x10, 0x3C, 0x01, 0x05, 0x00 };
+            VPW.write(req, 6);
+            break;
+        }
+        case 1: {
+            // Try target 0x00 (CM848D uses 0x00 on J1939)
+            uint8_t req[] = { 0x24, 0x00, 0x3C, 0x01, 0x05, 0x00 };
+            VPW.write(req, 6);
+            break;
+        }
+        case 2: {
+            // Try functional broadcast (0xFE = all modules)
+            uint8_t req[] = { 0x24, 0xFE, 0x3C, 0x01, 0x05, 0x00 };
+            VPW.write(req, 6);
+            break;
+        }
+    }
+    attempt++;
 }
 
 void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {

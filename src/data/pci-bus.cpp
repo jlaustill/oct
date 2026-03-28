@@ -17,68 +17,76 @@ void PciBus::setup(AppData* appData) {
     VPW.onError(onError);
     VPW.begin(J1850VPW_RX, J1850VPW_TX, ACTIVE_HIGH);
 
-    // Null-terminated filter array (J1850VPWCore iterates with while(*ids))
+    // Listen to normal messages + diagnostic responses + odometer
     uint8_t filter[] = { PCI_MSG_PCM_ENGINE, PCI_MSG_DIAG_RESPONSE, PCI_MSG_ODOMETER, PCI_MSG_MULTI_SENSOR, PCI_MSG_AMBIENT_TEMP, PCI_MSG_VIN, 0x00 };
     VPW.ignoreAll();
     VPW.listen(filter);
 }
 
-// PID scanner state — scans instrument cluster and ABS for odometer
-static uint8_t scanModule = 0;   // 0=cluster(0x60), 1=ABS(0x28)
-static uint8_t scanService = 0;  // index into services array
-static uint8_t scanPidHi = 0;    // high byte of PID
-static uint8_t scanPidLo = 0;    // low byte of PID
+// PID scanner — focused scan of cluster (0x60) with multiple services
+// DRB shows cluster PIDs in 0x28-0x3F range, but we scan 0x00-0xFF for pidHi
+// with pidLo 0x00-0xFF for completeness on service 0x22 first
+static uint16_t scanIdx = 0;
 static bool scanComplete = false;
 
-// Send next PID scan request — call from loop(), NOT ISR
-// Systematically probes service 0x22 and 0x3C on cluster and ABS
+// Scan table: {module, service, pidHi, pidLo}
+// Start with known DRB cluster ranges, then expand
+struct ScanEntry {
+    uint8_t module;
+    uint8_t service;
+    uint8_t pidHi;
+    uint8_t pidLo;
+};
+
 void PciBus::requestOdometer() {
     if (scanComplete) return;
 
-    uint8_t modules[] = { 0x60, 0x28 };  // instrument cluster, ABS
-    uint8_t services[] = { 0x22, 0x3C }; // Read by Local ID, Read PID
+    // Phase 1: Cluster (0x60) service 0x22, scan pidHi 0x00-0xFF with pidLo 0x00
+    // This covers all top-level PIDs quickly (256 probes = ~51 seconds)
+    // Phase 2: Cluster (0x60) service 0x3C, scan pidHi 0x00-0xFF with pidLo 0x00
+    // Phase 3: ABS (0x28) service 0x22, scan pidHi 0x00-0xFF with pidLo 0x00
+    // Phase 4: ABS (0x28) service 0x3C, scan pidHi 0x00-0xFF with pidLo 0x00
+    // Phase 5: Cluster (0x60) service 0x22, expand pidLo 0x01-0x0F for any pidHi that responded
+    // (Phase 5 is manual based on results from phases 1-4)
 
-    uint8_t mod = modules[scanModule];
-    uint8_t svc = services[scanService];
+    uint8_t phase = scanIdx / 256;
+    uint8_t pidHi = scanIdx % 256;
 
-    uint8_t req[] = { 0x24, mod, svc, scanPidHi, scanPidLo, 0x00 };
+    uint8_t mod, svc;
+    switch (phase) {
+        case 0: mod = 0x60; svc = 0x22; break;  // cluster, read by local ID
+        case 1: mod = 0x60; svc = 0x3C; break;  // cluster, read PID
+        case 2: mod = 0x28; svc = 0x22; break;  // ABS, read by local ID
+        case 3: mod = 0x28; svc = 0x3C; break;  // ABS, read PID
+        default:
+            scanComplete = true;
+            Serial.println("SCAN COMPLETE");
+            return;
+    }
+
+    uint8_t req[] = { 0x24, mod, svc, pidHi, 0x00, 0x00 };
     VPW.write(req, 6);
 
-    // Log every 16th probe to show progress without flooding
-    if (scanPidLo % 16 == 0) {
-        Serial.print("SCAN mod:0x");
+    // Log every 32nd probe
+    if (pidHi % 32 == 0) {
+        Serial.print("SCAN ");
+        Serial.print(phase);
+        Serial.print("/4 mod:0x");
         Serial.print(mod, HEX);
         Serial.print(" svc:0x");
         Serial.print(svc, HEX);
-        Serial.print(" pid:");
-        Serial.print(scanPidHi, HEX);
-        Serial.print("-");
-        Serial.println(scanPidLo, HEX);
+        Serial.print(" pid:0x");
+        Serial.println(pidHi, HEX);
     }
 
-    // Advance to next PID
-    scanPidLo++;
-    if (scanPidLo == 0) {  // wrapped around
-        scanPidHi++;
-        if (scanPidHi == 0) {  // wrapped around — done with this service
-            scanService++;
-            if (scanService >= sizeof(services)) {
-                scanService = 0;
-                scanModule++;
-                if (scanModule >= sizeof(modules)) {
-                    scanComplete = true;
-                    Serial.println("SCAN COMPLETE — all modules/services scanned");
-                }
-            }
-        }
-    }
+    scanIdx++;
 }
 
 void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
     _msgCount++;
 
     // // DEBUG: uncomment to print raw PCI messages
-    // Serial.print("PCI RX [");
+    // Serial.print("PCI [");
     // Serial.print(messageLength);
     // Serial.print("]: ");
     // for (uint8_t i = 0; i < messageLength; i++) {

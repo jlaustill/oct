@@ -20,6 +20,7 @@ class PciBus {
     public:
         static void setup(AppData* appData);
         static void requestOdometer();
+        static bool scanEnabled;
         static volatile uint32_t _msgCount;
         static volatile uint32_t _errCount;
 

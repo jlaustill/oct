@@ -38,8 +38,10 @@ struct ScanEntry {
     uint8_t pidLo;
 };
 
+bool PciBus::scanEnabled = false;
+
 void PciBus::requestOdometer() {
-    if (scanComplete) return;
+    if (!scanEnabled || scanComplete) return;
 
     // Phase 1: Cluster (0x60) service 0x22, scan pidHi 0x00-0xFF with pidLo 0x00
     // This covers all top-level PIDs quickly (256 probes = ~51 seconds)

@@ -40,9 +40,29 @@ void OctDomain::setup() {
     Serial.println("OCT: sending address claim...");
     J1939Bus::sendAddressClaim();
     Serial.println("OCT: all PGNs broadcasting on J1939");
+    Serial.println("OCT: type 'scan' to start PCI PID scanner");
 }
 
 void OctDomain::loop() {
+    // Check for serial commands
+    static char cmdBuf[16];
+    static uint8_t cmdLen = 0;
+    while (Serial.available()) {
+        char c = Serial.read();
+        if (c == '\n' || c == '\r') {
+            cmdBuf[cmdLen] = '\0';
+            if (cmdLen > 0) {
+                if (strcmp(cmdBuf, "scan") == 0) {
+                    PciBus::scanEnabled = true;
+                    Serial.println(">>> PID SCAN STARTED");
+                }
+            }
+            cmdLen = 0;
+        } else if (cmdLen < 15) {
+            cmdBuf[cmdLen++] = c;
+        }
+    }
+
     // Process FlexCAN events (frees TX mailboxes after transmission)
     J1939Bus::J1939BusCan.events();
     CumminsBus::CumminsBusCan.events();

@@ -275,18 +275,10 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
         return;
     }
 
-    // Log other traffic
-    Serial.print("J1939 RX ID:0x");
-    Serial.print(msg.id, HEX);
-    Serial.print(" [");
-    Serial.print(msg.len);
-    Serial.print("]: ");
-    for (uint8_t i = 0; i < msg.len; i++) {
-        if (msg.buf[i] < 0x10) Serial.print("0");
-        Serial.print(msg.buf[i], HEX);
-        Serial.print(" ");
-    }
-    Serial.println();
+    // Log other J1939 traffic (uncomment for debug)
+    // Serial.print("J1939 RX ID:0x");
+    // Serial.print(msg.id, HEX);
+    // Serial.println();
 }
 
 #endif // J1939_BUS_CPP

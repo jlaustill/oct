@@ -78,18 +78,18 @@ void CumminsBus::requestPgn(uint32_t pgn) {
 void CumminsBus::onReceive(const CAN_message_t &msg) {
     msgCount++;
 
-    // DEBUG: print raw CAN messages
-    Serial.print("CUMMINS RX ID:0x");
-    Serial.print(msg.id, HEX);
-    Serial.print(" [");
-    Serial.print(msg.len);
-    Serial.print("]: ");
-    for (uint8_t i = 0; i < msg.len; i++) {
-        if (msg.buf[i] < 0x10) Serial.print("0");
-        Serial.print(msg.buf[i], HEX);
-        Serial.print(" ");
-    }
-    Serial.println();
+    // Log Cummins messages (uncomment for debug)
+    // Serial.print("CUMMINS RX ID:0x");
+    // Serial.print(msg.id, HEX);
+    // Serial.print(" [");
+    // Serial.print(msg.len);
+    // Serial.print("]: ");
+    // for (uint8_t i = 0; i < msg.len; i++) {
+    //     if (msg.buf[i] < 0x10) Serial.print("0");
+    //     Serial.print(msg.buf[i], HEX);
+    //     Serial.print(" ");
+    // }
+    // Serial.println();
 
     if (_appData == nullptr) return;
 

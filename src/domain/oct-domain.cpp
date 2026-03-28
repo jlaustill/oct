@@ -26,7 +26,7 @@ AppData OctDomain::appData = {
 uint32_t lastDebugPrint = 0;
 uint32_t lastFastBroadcast = 0;     // 100ms: EEC1, CCVS
 uint32_t lastSlowBroadcast = 0;     // 1s: VD, EH
-uint32_t lastCumminsRequest = 0;    // 2s: cycle through Cummins PGN requests
+uint32_t lastCumminsRequest = 0;    // 2s: Cummins PGN requests
 
 void OctDomain::setup() {
     Serial.begin(115200);
@@ -40,29 +40,9 @@ void OctDomain::setup() {
     Serial.println("OCT: sending address claim...");
     J1939Bus::sendAddressClaim();
     Serial.println("OCT: all PGNs broadcasting on J1939");
-    Serial.println("OCT: type 'scan' to start PCI PID scanner");
 }
 
 void OctDomain::loop() {
-    // Check for serial commands
-    static char cmdBuf[16];
-    static uint8_t cmdLen = 0;
-    while (Serial.available()) {
-        char c = Serial.read();
-        if (c == '\n' || c == '\r') {
-            cmdBuf[cmdLen] = '\0';
-            if (cmdLen > 0) {
-                if (strcmp(cmdBuf, "scan") == 0) {
-                    PciBus::scanEnabled = true;
-                    Serial.println(">>> PID SCAN STARTED");
-                }
-            }
-            cmdLen = 0;
-        } else if (cmdLen < 15) {
-            cmdBuf[cmdLen++] = c;
-        }
-    }
-
     // Process FlexCAN events (frees TX mailboxes after transmission)
     J1939Bus::J1939BusCan.events();
     CumminsBus::CumminsBusCan.events();
@@ -86,7 +66,7 @@ void OctDomain::loop() {
         J1939Bus::broadcastEH();
     }
 
-    // 2s: request PGNs from Cummins ECU (CM848D only responds to requests)
+    // 2s: request PGNs from Cummins ECU
     if (now - lastCumminsRequest >= 2000) {
         lastCumminsRequest = now;
         static uint8_t cumminsReqIdx = 0;
@@ -96,48 +76,23 @@ void OctDomain::loop() {
         cumminsReqIdx++;
     }
 
-    // PCI PID scanner: 200ms between probes (scans cluster 0x60 and ABS 0x28)
-    static uint32_t lastPidScan = 0;
-    if (now - lastPidScan >= 200) {
-        lastPidScan = now;
-        PciBus::requestOdometer();
-    }
-
-    // Log diagnostic responses from PCI (printed from loop, not ISR)
-    if (PciBus::_diagResponseReady) {
-        PciBus::_diagResponseReady = false;
-        Serial.print("PCI DIAG [");
-        Serial.print(PciBus::_diagResponseLen);
-        Serial.print("]: ");
-        for (uint8_t i = 0; i < PciBus::_diagResponseLen; i++) {
-            if (PciBus::_diagResponseBuf[i] < 0x10) Serial.print("0");
-            Serial.print(PciBus::_diagResponseBuf[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println();
-    }
-
     // Debug: print AppData every 2 seconds
     if (now - lastDebugPrint >= 2000) {
         lastDebugPrint = now;
 
-        float battery, ambient;
+        float battery, ambient, load, oilP, intakeT, odo;
         appData.batteryVoltage.read(battery);
         appData.ambientTemp.read(ambient);
-
-        Serial.print("Batt:");
-        Serial.print(battery, 2);
-        Serial.print("V | Ambient:");
-        Serial.print(ambient, 1);
-        Serial.print("C");
-
-        float load, oilP, intakeT, odo;
         appData.engineLoad.read(load);
         appData.oilPressure.read(oilP);
         appData.intakeAirTemp.read(intakeT);
         appData.totalVehicleDistance.read(odo);
 
-        Serial.print(" | Load:");
+        Serial.print("Batt:");
+        Serial.print(battery, 2);
+        Serial.print("V | Ambient:");
+        Serial.print(ambient, 1);
+        Serial.print("C | Load:");
         Serial.print(load, 1);
         Serial.print("% | Oil:");
         Serial.print(oilP, 0);

@@ -74,8 +74,12 @@ void OctDomain::loop() {
         uint8_t numPgns = sizeof(pgns) / sizeof(pgns[0]);
         CumminsBus::requestPgn(pgns[cumminsReqIdx % numPgns]);
         cumminsReqIdx++;
+    }
 
-        // Also probe PCI for odometer from ABS/PCM/MIC/TCM
+    // PCI PID scanner: 200ms between probes (scans cluster 0x60 and ABS 0x28)
+    static uint32_t lastPidScan = 0;
+    if (now - lastPidScan >= 200) {
+        lastPidScan = now;
         PciBus::requestOdometer();
     }
 

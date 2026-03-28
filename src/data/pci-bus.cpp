@@ -23,38 +23,55 @@ void PciBus::setup(AppData* appData) {
     VPW.listen(filter);
 }
 
-// Send odometer diagnostic request — call from loop(), NOT ISR
-// Cycles through different modules and services to find odometer
-void PciBus::requestOdometer() {
-    static uint8_t attempt = 0;
+// PID scanner state — scans instrument cluster and ABS for odometer
+static uint8_t scanModule = 0;   // 0=cluster(0x60), 1=ABS(0x28)
+static uint8_t scanService = 0;  // index into services array
+static uint8_t scanPidHi = 0;    // high byte of PID
+static uint8_t scanPidLo = 0;    // low byte of PID
+static bool scanComplete = false;
 
-    switch (attempt % 4) {
-        case 0: {
-            // ABS module (0x28), service 0x22, PID 0x30, sub 0x01
-            uint8_t req[] = { 0x24, 0x28, 0x22, 0x30, 0x01, 0x00 };
-            VPW.write(req, 6);
-            break;
-        }
-        case 1: {
-            // PCM (0x10), service 0x3C
-            uint8_t req[] = { 0x24, 0x10, 0x3C, 0x01, 0x05, 0x00 };
-            VPW.write(req, 6);
-            break;
-        }
-        case 2: {
-            // MIC/cluster (0x60), service 0x22, ODO/TRIP
-            uint8_t req[] = { 0x24, 0x60, 0x22, 0x36, 0x01, 0x00 };
-            VPW.write(req, 6);
-            break;
-        }
-        case 3: {
-            // Transmission (0x18), service 0x21, TCC mileage
-            uint8_t req[] = { 0x24, 0x18, 0x21, 0x1C, 0x01, 0x00 };
-            VPW.write(req, 6);
-            break;
+// Send next PID scan request — call from loop(), NOT ISR
+// Systematically probes service 0x22 and 0x3C on cluster and ABS
+void PciBus::requestOdometer() {
+    if (scanComplete) return;
+
+    uint8_t modules[] = { 0x60, 0x28 };  // instrument cluster, ABS
+    uint8_t services[] = { 0x22, 0x3C }; // Read by Local ID, Read PID
+
+    uint8_t mod = modules[scanModule];
+    uint8_t svc = services[scanService];
+
+    uint8_t req[] = { 0x24, mod, svc, scanPidHi, scanPidLo, 0x00 };
+    VPW.write(req, 6);
+
+    // Log every 16th probe to show progress without flooding
+    if (scanPidLo % 16 == 0) {
+        Serial.print("SCAN mod:0x");
+        Serial.print(mod, HEX);
+        Serial.print(" svc:0x");
+        Serial.print(svc, HEX);
+        Serial.print(" pid:");
+        Serial.print(scanPidHi, HEX);
+        Serial.print("-");
+        Serial.println(scanPidLo, HEX);
+    }
+
+    // Advance to next PID
+    scanPidLo++;
+    if (scanPidLo == 0) {  // wrapped around
+        scanPidHi++;
+        if (scanPidHi == 0) {  // wrapped around — done with this service
+            scanService++;
+            if (scanService >= sizeof(services)) {
+                scanService = 0;
+                scanModule++;
+                if (scanModule >= sizeof(modules)) {
+                    scanComplete = true;
+                    Serial.println("SCAN COMPLETE — all modules/services scanned");
+                }
+            }
         }
     }
-    attempt++;
 }
 
 void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {

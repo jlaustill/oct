@@ -76,22 +76,46 @@ void CumminsBus::requestPgn(uint32_t pgn) {
     CumminsBusCan.write(msg);
 }
 
+// Service 0x4A memory read — send to ECU on Proprietary A (PGN 0xEF00)
+// CAN ID: 0x18EF00F9 (priority 6, PGN EF00, dest 0x00=ECU, src 0xF9=tool)
+void CumminsBus::readMemory(uint32_t addr, uint8_t len) {
+    CAN_message_t msg;
+    msg.id = 0x18EF00F9;
+    msg.flags.extended = true;
+    msg.len = 8;
+    msg.buf[0] = 0x4A;                    // Service ID
+    msg.buf[1] = (addr >> 24) & 0xFF;     // Address byte 3 (MSB)
+    msg.buf[2] = (addr >> 16) & 0xFF;     // Address byte 2
+    msg.buf[3] = (addr >> 8) & 0xFF;      // Address byte 1
+    msg.buf[4] = addr & 0xFF;             // Address byte 0 (LSB)
+    msg.buf[5] = len;                      // Length
+    msg.buf[6] = 0x00;
+    msg.buf[7] = 0x00;
+    CumminsBusCan.write(msg);
+}
+
 void CumminsBus::onReceive(const CAN_message_t &msg) {
     msgCount++;
     lastRxTime = millis();
 
-    // Log Cummins messages (uncomment for debug)
-    // Serial.print("CUMMINS RX ID:0x");
-    // Serial.print(msg.id, HEX);
-    // Serial.print(" [");
-    // Serial.print(msg.len);
-    // Serial.print("]: ");
-    // for (uint8_t i = 0; i < msg.len; i++) {
-    //     if (msg.buf[i] < 0x10) Serial.print("0");
-    //     Serial.print(msg.buf[i], HEX);
-    //     Serial.print(" ");
-    // }
-    // Serial.println();
+    // Handle Service 0x4B responses (memory read reply)
+    // CAN ID 0x18EFF900 = ECU(0x00) → Tool(0xF9) on PGN 0xEF00
+    if (msg.id == 0x18EFF900 && msg.buf[0] == 0x4B) {
+        Serial.print("SVC4A RESP addr:0x");
+        uint32_t addr = ((uint32_t)msg.buf[1] << 24) | ((uint32_t)msg.buf[2] << 16) |
+                        ((uint32_t)msg.buf[3] << 8) | msg.buf[4];
+        Serial.print(addr, HEX);
+        Serial.print(" len:");
+        Serial.print(msg.buf[5]);
+        Serial.print(" data:");
+        for (uint8_t i = 6; i < 8; i++) {
+            if (msg.buf[i] < 0x10) Serial.print("0");
+            Serial.print(msg.buf[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+        return;
+    }
 
     if (_appData == nullptr) return;
 

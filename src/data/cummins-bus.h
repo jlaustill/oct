@@ -9,6 +9,7 @@ class CumminsBus {
     public:
         static void setup(AppData* appData);
         static void requestPgn(uint32_t pgn);
+        static void readMemory(uint32_t addr, uint8_t len);
         static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> CumminsBusCan;
         static volatile uint32_t msgCount;
         static volatile uint32_t lastRxTime;

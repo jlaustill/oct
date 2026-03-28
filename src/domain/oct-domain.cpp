@@ -74,6 +74,19 @@ void OctDomain::loop() {
         uint8_t numPgns = sizeof(pgns) / sizeof(pgns[0]);
         CumminsBus::requestPgn(pgns[cumminsReqIdx % numPgns]);
         cumminsReqIdx++;
+
+        // Service 0x4A: read engine hours candidates from EEPROM
+        // Read 2 bytes at a time (hi then lo word of 4-byte values)
+        static uint8_t memReadIdx = 0;
+        switch (memReadIdx % 6) {
+            case 0: CumminsBus::readMemory(0x0100000C, 2); break;  // candidate 1 hi (220.6hrs in dump)
+            case 1: CumminsBus::readMemory(0x0100000E, 2); break;  // candidate 1 lo
+            case 2: CumminsBus::readMemory(0x01000035, 2); break;  // candidate 2 hi (244.7hrs in dump)
+            case 3: CumminsBus::readMemory(0x01000037, 2); break;  // candidate 2 lo
+            case 4: CumminsBus::readMemory(0x010000D6, 2); break;  // candidate 3 hi (115.1hrs in dump)
+            case 5: CumminsBus::readMemory(0x010000D8, 2); break;  // candidate 3 lo
+        }
+        memReadIdx++;
     }
 
     // Debug: print AppData every 2 seconds

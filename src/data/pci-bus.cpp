@@ -6,6 +6,7 @@
 AppData* PciBus::_appData = nullptr;
 volatile uint32_t PciBus::_msgCount = 0;
 volatile uint32_t PciBus::_errCount = 0;
+volatile uint32_t PciBus::_lastRxTime = 0;
 
 void PciBus::setup(AppData* appData) {
     _appData = appData;
@@ -22,6 +23,7 @@ void PciBus::setup(AppData* appData) {
 
 void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
     _msgCount++;
+    _lastRxTime = millis();
 
     if (_appData == nullptr) return;
 

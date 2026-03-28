@@ -109,8 +109,13 @@ void OctDomain::loop() {
             Serial.print(vin);
         }
 
+        // Bus status: GOOD if received a message recently
         Serial.print(" | PCI:");
-        Serial.print(PciBus::_msgCount);
+        Serial.print((millis() - PciBus::_lastRxTime < 2000) ? "GOOD" : "BAD");
+        Serial.print(" J1939:");
+        Serial.print((millis() - J1939Bus::lastRxTime < 10000) ? "GOOD" : "BAD");
+        Serial.print(" CUMMINS:");
+        Serial.print((millis() - CumminsBus::lastRxTime < 5000) ? "GOOD" : "BAD");
 
         Serial.println();
     }

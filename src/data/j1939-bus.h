@@ -30,6 +30,7 @@ class J1939Bus {
         static void broadcastEH();
         static void processTpBam();  // call from loop()
         static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> J1939BusCan;
+        static volatile uint32_t lastRxTime;
 
     private:
         static AppData* _appData;

@@ -6,6 +6,7 @@
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> CumminsBus::CumminsBusCan;
 AppData* CumminsBus::_appData = nullptr;
 volatile uint32_t CumminsBus::msgCount = 0;
+volatile uint32_t CumminsBus::lastRxTime = 0;
 
 void CumminsBus::setup(AppData* appData) {
     _appData = appData;
@@ -77,6 +78,7 @@ void CumminsBus::requestPgn(uint32_t pgn) {
 
 void CumminsBus::onReceive(const CAN_message_t &msg) {
     msgCount++;
+    lastRxTime = millis();
 
     // Log Cummins messages (uncomment for debug)
     // Serial.print("CUMMINS RX ID:0x");

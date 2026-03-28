@@ -6,6 +6,7 @@
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> J1939Bus::J1939BusCan;
 AppData* J1939Bus::_appData = nullptr;
 TpBamState J1939Bus::_tp = {false, {0}, 0, 0, 0, 0, 0};
+volatile uint32_t J1939Bus::lastRxTime = 0;
 
 void J1939Bus::setup(AppData* appData) {
     _appData = appData;
@@ -235,6 +236,8 @@ void J1939Bus::processTpBam() {
 }
 
 void J1939Bus::onReceive(const CAN_message_t &msg) {
+    lastRxTime = millis();
+
     J1939Message j1939;
     j1939.setCanId(msg.id);
 

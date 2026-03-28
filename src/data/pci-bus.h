@@ -19,6 +19,7 @@ class PciBus {
         static void setup(AppData* appData);
         static volatile uint32_t _msgCount;
         static volatile uint32_t _errCount;
+        static volatile uint32_t _lastRxTime;
 
     private:
         static AppData* _appData;

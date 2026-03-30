@@ -258,7 +258,7 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
             }
             case 65259: {  // Component Identification
                 // Format: Make*Model*SerialNumber*UnitNumber*
-                const char* compId = "CUMMINS*CM848D*OCT001*1*";
+                const char* compId = "CUMMINS*CM848D*57185646*1*";
                 startTpBam(0x00FEEB, (const uint8_t*)compId, strlen(compId));
                 break;
             }

@@ -1,10 +1,7 @@
-#ifndef CUMMINS_BUS_CPP
-#define CUMMINS_BUS_CPP
-
 #include "cummins-bus.h"
 
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> CumminsBus::CumminsBusCan;
-AppData* CumminsBus::_appData = nullptr;
+volatile AppData* CumminsBus::_appData = nullptr;
 volatile uint32_t CumminsBus::msgCount = 0;
 volatile uint32_t CumminsBus::lastRxTime = 0;
 
@@ -21,12 +18,11 @@ void CumminsBus::setup(AppData* appData) {
         CumminsBusCan.enableFIFOInterrupt();
         CumminsBusCan.onReceive(onReceive);
 
-        // Send a test request and check if it gets ACKed
         CAN_message_t test;
         test.id = 0x18EAFFFA;
         test.flags.extended = true;
         test.len = 3;
-        test.buf[0] = 0xEE;  // PGN 65262 (ET1)
+        test.buf[0] = 0xEE;
         test.buf[1] = 0xFE;
         test.buf[2] = 0x00;
 
@@ -62,12 +58,9 @@ void CumminsBus::setup(AppData* appData) {
     CumminsBusCan.onReceive(onReceive);
 }
 
-// Send a PGN 59904 request to the ECU (broadcast)
-// Request format: 3 bytes = PGN little-endian
-// CAN ID: 0x18EAFF00 (priority 6, PGN 59904/0xEA00, dest 0xFF, src 0x00)
 void CumminsBus::requestPgn(uint32_t pgn) {
     CAN_message_t msg;
-    msg.id = 0x18EAFFFA;  // src 0xFA (service tool address)
+    msg.id = 0x18EAFFFA;
     msg.flags.extended = true;
     msg.len = 3;
     msg.buf[0] = pgn & 0xFF;
@@ -76,19 +69,18 @@ void CumminsBus::requestPgn(uint32_t pgn) {
     CumminsBusCan.write(msg);
 }
 
-// Service 0x4A memory read — send to ECU on Proprietary A (PGN 0xEF00)
-// CAN ID: 0x18EF00F9 (priority 6, PGN EF00, dest 0x00=ECU, src 0xF9=tool)
+// Service 0x4A memory read — only request 1-2 bytes (single-frame response)
 void CumminsBus::readMemory(uint32_t addr, uint8_t len) {
     CAN_message_t msg;
     msg.id = 0x18EF00F9;
     msg.flags.extended = true;
     msg.len = 8;
-    msg.buf[0] = 0x4A;                    // Service ID
-    msg.buf[1] = (addr >> 24) & 0xFF;     // Address byte 3 (MSB)
-    msg.buf[2] = (addr >> 16) & 0xFF;     // Address byte 2
-    msg.buf[3] = (addr >> 8) & 0xFF;      // Address byte 1
-    msg.buf[4] = addr & 0xFF;             // Address byte 0 (LSB)
-    msg.buf[5] = len;                      // Length
+    msg.buf[0] = 0x4A;
+    msg.buf[1] = (addr >> 24) & 0xFF;
+    msg.buf[2] = (addr >> 16) & 0xFF;
+    msg.buf[3] = (addr >> 8) & 0xFF;
+    msg.buf[4] = addr & 0xFF;
+    msg.buf[5] = (len <= 2) ? len : 2;  // cap at 2 to stay single-frame
     msg.buf[6] = 0x00;
     msg.buf[7] = 0x00;
     CumminsBusCan.write(msg);
@@ -98,30 +90,35 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
     msgCount++;
     lastRxTime = millis();
 
-    // Handle Service 0x4B responses (memory read reply)
-    // CAN ID 0x18EFF900 = ECU(0x00) → Tool(0xF9) on PGN 0xEF00
+    // Handle Service 0x4B responses (single-frame memory read reply)
     if (msg.id == 0x18EFF900 && msg.buf[0] == 0x4B) {
-        Serial.print("SVC4A RESP addr:0x");
         uint32_t addr = ((uint32_t)msg.buf[1] << 24) | ((uint32_t)msg.buf[2] << 16) |
                         ((uint32_t)msg.buf[3] << 8) | msg.buf[4];
-        Serial.print(addr, HEX);
-        Serial.print(" len:");
-        Serial.print(msg.buf[5]);
-        Serial.print(" data:");
-        for (uint8_t i = 6; i < 8; i++) {
-            if (msg.buf[i] < 0x10) Serial.print("0");
-            Serial.print(msg.buf[i], HEX);
-            Serial.print(" ");
+        uint16_t data = ((uint16_t)msg.buf[6] << 8) | msg.buf[7];
+
+        // Engine hours: combine hi/lo reads from EEPROM 0x01000035
+        // Hi read always comes first (requested first in loop), lo follows immediately
+        static volatile uint16_t engineHoursHi = 0;
+        static volatile uint32_t engineHoursHiTime = 0;
+
+        if (addr == 0x01000035) {
+            engineHoursHi = data;
+            engineHoursHiTime = millis();
+        } else if (addr == 0x01000037) {
+            // Only combine if hi word was read recently (within 5s)
+            if (_appData != nullptr && (millis() - engineHoursHiTime) < 5000) {
+                uint32_t raw = ((uint32_t)engineHoursHi << 16) | data;
+                float hours = raw * 0.2f / 3600.0f;
+                _appData->engineTotalHours.update(hours);
+            }
         }
-        Serial.println();
+
         return;
     }
 
     if (_appData == nullptr) return;
 
     // Parse J1939 PGN from CAN ID
-    // For PDU2 (pduFormat >= 0xF0): PGN = pduFormat << 8 | pduSpecific
-    // For PDU1 (pduFormat < 0xF0): PGN = pduFormat << 8 (pduSpecific is destination)
     J1939Message j1939;
     j1939.setCanId(msg.id);
 
@@ -132,33 +129,19 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
     switch (pgn) {
         // PGN 65248 (0xFEE0) - Vehicle Distance
         case 65248: {
-            // Byte 4-7: Total Vehicle Distance, 0.125 km/bit
             uint32_t distRaw = (uint32_t)msg.buf[4] | ((uint32_t)msg.buf[5] << 8) |
                                ((uint32_t)msg.buf[6] << 16) | ((uint32_t)msg.buf[7] << 24);
             float km = distRaw * 0.125f;
             _appData->totalVehicleDistance.update(km);
-            Serial.print("CUMMINS odometer: ");
-            Serial.print(km, 1);
-            Serial.println(" km");
             break;
         }
 
         // PGN 65262 (0xFEEE) - Engine Temperature 1
+        // SPN 110: bytes 0-1, little-endian, 0.03125 °C/bit, offset -273 °C
         case 65262: {
-            float coolantC = (float)msg.buf[0] - 40.0f;
+            uint16_t coolantRaw = (uint16_t)msg.buf[0] | ((uint16_t)msg.buf[1] << 8);
+            float coolantC = coolantRaw * 0.03125f - 273.0f;
             _appData->coolantTemp.update(coolantC);
-            break;
-        }
-
-        // PGN 65253 (0xFEE5) - Engine Hours
-        case 65253: {
-            uint32_t hoursRaw = (uint32_t)msg.buf[0] | ((uint32_t)msg.buf[1] << 8) |
-                                ((uint32_t)msg.buf[2] << 16) | ((uint32_t)msg.buf[3] << 24);
-            float hours = hoursRaw * 0.05f;
-            _appData->engineTotalHours.update(hours);
-            Serial.print("CUMMINS hours: ");
-            Serial.print(hours, 1);
-            Serial.println(" hrs");
             break;
         }
 
@@ -166,5 +149,3 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
             break;
     }
 }
-
-#endif // CUMMINS_BUS_CPP

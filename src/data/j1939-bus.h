@@ -7,7 +7,7 @@
 
 // Staleness thresholds per spec
 #define STALE_FAST_MS 500   // EEC1, CCVS (100ms broadcast)
-#define STALE_SLOW_MS 5000  // VD, EH (1s broadcast)
+#define STALE_SLOW_MS 30000 // VD, EH — Cummins data updates every ~10s
 
 // TP BAM state machine for multi-packet responses
 struct TpBamState {

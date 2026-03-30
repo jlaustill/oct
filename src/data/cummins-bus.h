@@ -15,7 +15,7 @@ class CumminsBus {
         static volatile uint32_t lastRxTime;
 
     private:
-        static AppData* _appData;
+        static volatile AppData* _appData;
         static void onReceive(const CAN_message_t &msg);
 };
 

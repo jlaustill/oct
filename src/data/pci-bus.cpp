@@ -1,6 +1,3 @@
-#ifndef PCI_BUS_CPP
-#define PCI_BUS_CPP
-
 #include "pci-bus.h"
 
 AppData* PciBus::_appData = nullptr;
@@ -126,5 +123,3 @@ void PciBus::onError(J1850VPW_Operations op, J1850VPW_Errors err) {
     Serial.print(" ERR: 0x");
     Serial.println(err, HEX);
 }
-
-#endif // PCI_BUS_CPP

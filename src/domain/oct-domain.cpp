@@ -1,6 +1,3 @@
-#ifndef OCT_DOMAIN_CPP
-#define OCT_DOMAIN_CPP
-
 #include "oct-domain.h"
 #include <Arduino.h>
 
@@ -75,18 +72,16 @@ void OctDomain::loop() {
         CumminsBus::requestPgn(pgns[cumminsReqIdx % numPgns]);
         cumminsReqIdx++;
 
-        // Service 0x4A: read engine hours candidates from EEPROM
-        // Read 2 bytes at a time (hi then lo word of 4-byte values)
-        static uint8_t memReadIdx = 0;
-        switch (memReadIdx % 6) {
-            case 0: CumminsBus::readMemory(0x0100000C, 2); break;  // candidate 1 hi (220.6hrs in dump)
-            case 1: CumminsBus::readMemory(0x0100000E, 2); break;  // candidate 1 lo
-            case 2: CumminsBus::readMemory(0x01000035, 2); break;  // candidate 2 hi (244.7hrs in dump)
-            case 3: CumminsBus::readMemory(0x01000037, 2); break;  // candidate 2 lo
-            case 4: CumminsBus::readMemory(0x010000D6, 2); break;  // candidate 3 hi (115.1hrs in dump)
-            case 5: CumminsBus::readMemory(0x010000D8, 2); break;  // candidate 3 lo
+        // Service 0x4A: read engine hours from EEPROM (ECM total run time)
+        // Address 0x01000035, 4 bytes, scale 0.2 seconds/count
+        // Read as two 2-byte reads (hi word then lo word)
+        static bool readHi = true;
+        if (readHi) {
+            CumminsBus::readMemory(0x01000035, 2);
+        } else {
+            CumminsBus::readMemory(0x01000037, 2);
         }
-        memReadIdx++;
+        readHi = !readHi;
     }
 
     // Debug: print AppData every 2 seconds
@@ -115,6 +110,11 @@ void OctDomain::loop() {
         Serial.print(odo, 1);
         Serial.print("km");
 
+        float hours;
+        appData.engineTotalHours.read(hours);
+        Serial.print(" | Hrs:");
+        Serial.print(hours, 1);
+
         char vin[18];
         appData.vin.read(vin, 18);
         if (vin[0] != '\0') {
@@ -133,5 +133,3 @@ void OctDomain::loop() {
         Serial.println();
     }
 }
-
-#endif // OCT_DOMAIN_CPP

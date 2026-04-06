@@ -96,22 +96,17 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
                         ((uint32_t)msg.buf[3] << 8) | msg.buf[4];
         uint16_t data = ((uint16_t)msg.buf[6] << 8) | msg.buf[7];
 
-        // Engine hours: combine hi/lo reads from EEPROM 0x01000035
-        // Hi read always comes first (requested first in loop), lo follows immediately
-        static volatile uint16_t engineHoursHi = 0;
-        static volatile uint32_t engineHoursHiTime = 0;
-
-        if (addr == 0x01000035) {
-            engineHoursHi = data;
-            engineHoursHiTime = millis();
-        } else if (addr == 0x01000037) {
-            // Only combine if hi word was read recently (within 5s)
-            if (_appData != nullptr && (millis() - engineHoursHiTime) < 5000) {
-                uint32_t raw = ((uint32_t)engineHoursHi << 16) | data;
-                float hours = raw * 0.2f / 3600.0f;
-                _appData->engineTotalHours.update(hours);
-            }
-        }
+        // Log all Service 0x4A responses
+        Serial.print("SVC4A 0x");
+        Serial.print(addr, HEX);
+        Serial.print(" = 0x");
+        if (data < 0x1000) Serial.print("0");
+        if (data < 0x100) Serial.print("0");
+        if (data < 0x10) Serial.print("0");
+        Serial.print(data, HEX);
+        Serial.print(" (");
+        Serial.print(data);
+        Serial.println(")");
 
         return;
     }

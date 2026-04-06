@@ -1,9 +1,58 @@
 #include "oct-domain.h"
 #include <Arduino.h>
+#include <EEPROM.h>
 
 #include "data/j1939-bus.h"
 #include "data/cummins-bus.h"
 #include "data/pci-bus.h"
+
+// EEPROM layout for persisted values
+#define EEPROM_MAGIC 0x4F435431  // "OCT1"
+#define EEPROM_ADDR_MAGIC    0
+#define EEPROM_ADDR_ODO      4   // float, km
+#define EEPROM_ADDR_HOURS    8   // float, hours
+#define EEPROM_ADDR_TRIP    12   // float, km (reserved for future)
+
+static void loadFromEeprom(AppData& appData) {
+    uint32_t magic;
+    EEPROM.get(EEPROM_ADDR_MAGIC, magic);
+    if (magic != EEPROM_MAGIC) {
+        Serial.println("EEPROM: no saved data (first boot)");
+        return;
+    }
+
+    float odo, hours;
+    EEPROM.get(EEPROM_ADDR_ODO, odo);
+    EEPROM.get(EEPROM_ADDR_HOURS, hours);
+
+    // Seed AppData with saved values — these will be overwritten
+    // once live data arrives from the ECU
+    if (odo > 0.0f) {
+        appData.totalVehicleDistance.update(odo);
+        Serial.print("EEPROM: loaded odo=");
+        Serial.print(odo, 1);
+        Serial.println("km");
+    }
+    if (hours > 0.0f) {
+        appData.engineTotalHours.update(hours);
+        Serial.print("EEPROM: loaded hours=");
+        Serial.println(hours, 1);
+    }
+}
+
+static void saveToEeprom(AppData& appData) {
+    float odo, hours;
+    appData.totalVehicleDistance.read(odo);
+    appData.engineTotalHours.read(hours);
+
+    // Only save if we have real data (not zero)
+    if (odo <= 0.0f && hours <= 0.0f) return;
+
+    uint32_t magic = EEPROM_MAGIC;
+    EEPROM.put(EEPROM_ADDR_MAGIC, magic);
+    EEPROM.put(EEPROM_ADDR_ODO, odo);
+    EEPROM.put(EEPROM_ADDR_HOURS, hours);
+}
 
 AppData OctDomain::appData = {
     .engineRpm = {0.0f, "RPM", 0},
@@ -24,10 +73,16 @@ uint32_t lastDebugPrint = 0;
 uint32_t lastFastBroadcast = 0;     // 100ms: EEC1, CCVS
 uint32_t lastSlowBroadcast = 0;     // 1s: VD, EH
 uint32_t lastCumminsRequest = 0;    // 2s: Cummins PGN requests
+uint32_t lastEepromSave = 0;        // 30s: persist to EEPROM
 
 void OctDomain::setup() {
     Serial.begin(115200);
     Serial.println("OCT: starting...");
+
+    // Load persisted values before initializing buses
+    // so J1939 broadcasts have real data from the first frame
+    loadFromEeprom(appData);
+
     J1939Bus::setup(&appData);
     Serial.println("OCT: J1939 bus (CAN3/CAN_A pins 30/31) initialized");
     CumminsBus::setup(&appData);
@@ -72,16 +127,25 @@ void OctDomain::loop() {
         CumminsBus::requestPgn(pgns[cumminsReqIdx % numPgns]);
         cumminsReqIdx++;
 
-        // Service 0x4A: read engine hours from EEPROM (ECM total run time)
-        // Address 0x01000035, 4 bytes, scale 0.2 seconds/count
-        // Read as two 2-byte reads (hi word then lo word)
-        static bool readHi = true;
-        if (readHi) {
-            CumminsBus::readMemory(0x01000035, 2);
-        } else {
-            CumminsBus::readMemory(0x01000037, 2);
+        // Service 0x4A: read live values from RAM
+        // total_vehicle_distance_raw at 0x003fdd6c (4 bytes)
+        // Also scan nearby for engine hours
+        static uint8_t memReadIdx = 0;
+        switch (memReadIdx % 6) {
+            case 0: CumminsBus::readMemory(0x003fdd6c, 2); break;  // total_distance hi
+            case 1: CumminsBus::readMemory(0x003fdd6e, 2); break;  // total_distance lo
+            case 2: CumminsBus::readMemory(0x003fdd70, 2); break;  // trip_distance hi
+            case 3: CumminsBus::readMemory(0x003fdd72, 2); break;  // trip_distance lo
+            case 4: CumminsBus::readMemory(0x003fdd64, 2); break;  // nearby — maybe hours?
+            case 5: CumminsBus::readMemory(0x003fdd68, 2); break;  // nearby — maybe hours?
         }
-        readHi = !readHi;
+        memReadIdx++;
+    }
+
+    // 30s: persist AppData to EEPROM
+    if (now - lastEepromSave >= 30000) {
+        lastEepromSave = now;
+        saveToEeprom(appData);
     }
 
     // Debug: print AppData every 2 seconds

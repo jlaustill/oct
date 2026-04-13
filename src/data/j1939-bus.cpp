@@ -127,10 +127,6 @@ void J1939Bus::broadcastVD() {
     msg.buf[6] = (j1939Raw >> 16) & 0xFF;
     msg.buf[7] = (j1939Raw >> 24) & 0xFF;
 
-    Serial.print("Odometer: ");
-    Serial.print(total / 8000.0f, 3);
-    Serial.println(" mi");
-
     J1939BusCan.write(msg);
 }
 
@@ -277,9 +273,6 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
     if (j1939.pduFormat == 0xEA && msg.len >= 3) {
         uint32_t requestedPgn = msg.buf[0] | ((uint32_t)msg.buf[1] << 8) | ((uint32_t)msg.buf[2] << 16);
 
-        Serial.print("J1939 REQ PGN:");
-        Serial.println(requestedPgn);
-
         switch (requestedPgn) {
             case 65260: {  // Vehicle Identification (VIN)
                 if (_appData != nullptr) {
@@ -305,7 +298,7 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
             case 65173:  broadcastRebuildInformation();  break;
             case 60928:  sendAddressClaim(); break;
             default:
-                Serial.print("J1939 NACK PGN:");
+                Serial.print("J1939 UNHANDLED REQ PGN:");
                 Serial.println(requestedPgn);
                 break;
         }

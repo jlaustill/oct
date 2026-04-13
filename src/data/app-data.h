@@ -69,11 +69,12 @@ struct AppData {
     // CCVS - PGN 65265 (broadcast 100ms)
     FloatValue vehicleSpeed;    // km/h
 
-    // VD - PGN 65248 (broadcast 1s)
-    FloatValue totalVehicleDistance; // km
+    // VD - PGN 65248 (broadcast 1s) — owned by Odometer class, not stored here
 
-    // EH - PGN 65253 (broadcast 1s)
-    FloatValue engineTotalHours;    // hours
+    // EH - PGN 65253 (broadcast 1s) — resets on engine rebuild
+    FloatValue engineHoursSinceRebuild;  // hours
+    // Lifetime counter — never reset
+    FloatValue engineHoursTruckLifetime; // hours
 
     // VI - PGN 65260 (on request)
     StringValue vin;

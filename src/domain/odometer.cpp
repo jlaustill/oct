@@ -1,67 +1,67 @@
 #include "odometer.h"
 #include <EEPROM.h>
 
-// EEPROM slice (bytes 0x00..0x03)
-#define EEPROM_ADDR_VALUE_KM  0x00   // float, km
-#define EEPROM_UNINITIALIZED  0xFFFFFFFFu  // fresh flash reads all 0xFF
+// EEPROM slice
+#define EEPROM_ADDR_TOTAL    0x00          // uint32_t, 1/8000 mi units
+#define EEPROM_UNINITIALIZED 0xFFFFFFFFu
 
-#define ACCUMULATE_INTERVAL_MS 1000
-#define SAVE_INTERVAL_MS       30000
-#define SPEED_STALE_MS         2000
+// 1 count = 1/8000 mi = 0.000125 mi = 0.000201168 km = 0.201168 m
+#define COUNTS_PER_MILE      8000u
+#define KM_PER_MILE          1.609344
 
-AppData* Odometer::_appData = nullptr;
-elapsedMillis Odometer::_sinceAccumulate;
+#define SAVE_INTERVAL_MS     30000
+
+uint32_t Odometer::_total = 0;
 elapsedMillis Odometer::_sinceSave;
 
-void Odometer::setup(AppData* appData) {
-    _appData = appData;
+void Odometer::setup() {
     load();
-    _sinceAccumulate = 0;
     _sinceSave = 0;
 }
 
 void Odometer::loop() {
-    if (_sinceAccumulate >= ACCUMULATE_INTERVAL_MS) {
-        _sinceAccumulate = 0;
-        accumulate();
-    }
-
     if (_sinceSave >= SAVE_INTERVAL_MS) {
         _sinceSave = 0;
         save();
     }
 }
 
+void Odometer::onPulses(uint8_t pulses) {
+    _total += pulses;
+}
+
+void Odometer::setAndSave(float km) {
+    double miles = (double)km / KM_PER_MILE;
+    _total = (uint32_t)(miles * COUNTS_PER_MILE + 0.5);
+    save();
+    _sinceSave = 0;
+}
+
+uint32_t Odometer::rawCounts() {
+    return _total;
+}
+
+float Odometer::km() {
+    return (float)((double)_total / COUNTS_PER_MILE * KM_PER_MILE);
+}
+
 void Odometer::load() {
     uint32_t raw;
-    EEPROM.get(EEPROM_ADDR_VALUE_KM, raw);
+    EEPROM.get(EEPROM_ADDR_TOTAL, raw);
 
     if (raw == EEPROM_UNINITIALIZED) {
         Serial.println("EEPROM: Odometer NOT SEEDED — value will start at 0");
         return;
     }
 
-    float km;
-    memcpy(&km, &raw, sizeof(float));
-    _appData->totalVehicleDistance.update(km);
+    _total = raw;
     Serial.print("EEPROM: Odometer loaded ");
-    Serial.print(km, 1);
-    Serial.println(" km");
-}
-
-void Odometer::accumulate() {
-    float speed;
-    _appData->vehicleSpeed.read(speed);
-    if (speed <= 0.0f || _appData->vehicleSpeed.isStale(SPEED_STALE_MS)) return;
-
-    float km;
-    _appData->totalVehicleDistance.read(km);
-    km += speed / 3600.0f;  // km/h × 1 s → km
-    _appData->totalVehicleDistance.update(km);
+    Serial.print(_total);
+    Serial.print(" counts (");
+    Serial.print(km(), 3);
+    Serial.println(" km)");
 }
 
 void Odometer::save() {
-    float km;
-    _appData->totalVehicleDistance.read(km);
-    EEPROM.put(EEPROM_ADDR_VALUE_KM, km);
+    EEPROM.put(EEPROM_ADDR_TOTAL, _total);
 }

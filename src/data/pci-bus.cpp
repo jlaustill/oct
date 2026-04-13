@@ -1,4 +1,5 @@
 #include "pci-bus.h"
+#include "domain/odometer.h"
 
 AppData* PciBus::_appData = nullptr;
 volatile uint32_t PciBus::msgCount = 0;
@@ -22,9 +23,8 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
     msgCount++;
     sinceLastRx = 0;
 
-    // DEBUG: log only interesting messages (skip high-frequency known ones)
-    uint8_t id = message[0];
-    // Skip: 0x10 (RPM/speed), 0x35, 0x1E, 0xB0, 0xB1, 0xD1
+    // DEBUG: log unknown messages (re-enable if diagnosing a new PCI ID)
+    // uint8_t id = message[0];
     // if (id != 0x10 && id != 0x35 && id != 0x1E && id != 0xB0 && id != 0xB1 && id != 0xD1) {
     //     Serial.print("PCI ");
     //     if (id < 0x10) Serial.print("0");
@@ -58,6 +58,17 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
             float loadPct = (message[5] / 255.0f) * 100.0f;
             _appData->engineLoad.update(loadPct);
 
+            break;
+        }
+
+        // 0x5D: ECM Distance/Fuel (Chry_Dat5D).
+        // byte 0: VSS pulses since last $5D (1 pulse = 1/8000 mi)
+        // bytes 1-2: injector on-time (u16 BE) — unused here
+        // bytes 3-4: fuel delivered (u16 BE) — unused here
+        case PCI_MSG_DISTANCE_PULSES: {
+            if (messageLength < 2) break;  // header + at least pulse byte
+            uint8_t pulses = message[1];
+            Odometer::onPulses(pulses);
             break;
         }
 

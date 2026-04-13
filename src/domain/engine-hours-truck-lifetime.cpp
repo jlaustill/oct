@@ -1,9 +1,9 @@
-#include "engine-hours.h"
+#include "engine-hours-truck-lifetime.h"
 #include <EEPROM.h>
 
-// EEPROM slice (bytes 0x04..0x07)
-#define EEPROM_ADDR_VALUE_HOURS  0x04   // float, hours
-#define EEPROM_UNINITIALIZED     0xFFFFFFFFu  // fresh flash reads all 0xFF
+// EEPROM slice (bytes 0x08..0x0B)
+#define EEPROM_ADDR_VALUE_HOURS  0x08   // float, hours
+#define EEPROM_UNINITIALIZED     0xFFFFFFFFu
 
 // Matches CM848D firmware RUNNING_RPM_THRESHOLD (kuminz-re
 // firmware_types.hpp:1035). Below this, the engine is cranking.
@@ -13,18 +13,18 @@
 #define SAVE_INTERVAL_MS       30000
 #define RPM_STALE_MS           2000
 
-AppData* EngineHours::_appData = nullptr;
-elapsedMillis EngineHours::_sinceAccumulate;
-elapsedMillis EngineHours::_sinceSave;
+AppData* EngineHoursTruckLifetime::_appData = nullptr;
+elapsedMillis EngineHoursTruckLifetime::_sinceAccumulate;
+elapsedMillis EngineHoursTruckLifetime::_sinceSave;
 
-void EngineHours::setup(AppData* appData) {
+void EngineHoursTruckLifetime::setup(AppData* appData) {
     _appData = appData;
     load();
     _sinceAccumulate = 0;
     _sinceSave = 0;
 }
 
-void EngineHours::loop() {
+void EngineHoursTruckLifetime::loop() {
     if (_sinceAccumulate >= ACCUMULATE_INTERVAL_MS) {
         _sinceAccumulate = 0;
         accumulate();
@@ -36,36 +36,42 @@ void EngineHours::loop() {
     }
 }
 
-void EngineHours::load() {
+void EngineHoursTruckLifetime::load() {
     uint32_t raw;
     EEPROM.get(EEPROM_ADDR_VALUE_HOURS, raw);
 
     if (raw == EEPROM_UNINITIALIZED) {
-        Serial.println("EEPROM: EngineHours NOT SEEDED — value will start at 0");
+        Serial.println("EEPROM: EngineHoursTruckLifetime NOT SEEDED — value will start at 0");
         return;
     }
 
     float hours;
     memcpy(&hours, &raw, sizeof(float));
-    _appData->engineTotalHours.update(hours);
-    Serial.print("EEPROM: EngineHours loaded ");
+    _appData->engineHoursTruckLifetime.update(hours);
+    Serial.print("EEPROM: EngineHoursTruckLifetime loaded ");
     Serial.print(hours, 1);
     Serial.println(" hrs");
 }
 
-void EngineHours::accumulate() {
+void EngineHoursTruckLifetime::accumulate() {
     float rpm;
     _appData->engineRpm.read(rpm);
     if (rpm <= RUNNING_RPM_THRESHOLD || _appData->engineRpm.isStale(RPM_STALE_MS)) return;
 
     float hours;
-    _appData->engineTotalHours.read(hours);
+    _appData->engineHoursTruckLifetime.read(hours);
     hours += 1.0f / 3600.0f;  // 1 s → hours
-    _appData->engineTotalHours.update(hours);
+    _appData->engineHoursTruckLifetime.update(hours);
 }
 
-void EngineHours::save() {
+void EngineHoursTruckLifetime::save() {
     float hours;
-    _appData->engineTotalHours.read(hours);
+    _appData->engineHoursTruckLifetime.read(hours);
     EEPROM.put(EEPROM_ADDR_VALUE_HOURS, hours);
+}
+
+void EngineHoursTruckLifetime::setAndSave(float hours) {
+    _appData->engineHoursTruckLifetime.update(hours);
+    save();
+    _sinceSave = 0;
 }

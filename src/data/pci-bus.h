@@ -10,10 +10,11 @@
 #define J1850VPW_TX 14
 
 // PCI message IDs
-#define PCI_MSG_PCM_ENGINE   0x10
-#define PCI_MSG_MULTI_SENSOR 0xC0
-#define PCI_MSG_AMBIENT_TEMP 0xCD
-#define PCI_MSG_VIN          0xF0
+#define PCI_MSG_PCM_ENGINE       0x10
+#define PCI_MSG_DISTANCE_PULSES  0x5D   // ECM Tx, Chry_Dat5D, byte 0 = pulses (1/8000 mi each)
+#define PCI_MSG_MULTI_SENSOR     0xC0
+#define PCI_MSG_AMBIENT_TEMP     0xCD
+#define PCI_MSG_VIN              0xF0
 
 class PciBus {
     public:

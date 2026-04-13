@@ -1,10 +1,10 @@
-#ifndef ENGINE_HOURS_H
-#define ENGINE_HOURS_H
+#ifndef ENGINE_HOURS_SINCE_REBUILD_H
+#define ENGINE_HOURS_SINCE_REBUILD_H
 
 #include <Arduino.h>
 #include "data/app-data.h"
 
-// Owns the full lifecycle of AppData::engineTotalHours:
+// Owns the full lifecycle of AppData::engineHoursSinceRebuild:
 //   1. load from EEPROM on boot
 //   2. accumulate every 1s when RPM > running threshold
 //   3. persist to EEPROM every 30s
@@ -13,10 +13,11 @@
 // kuminz-re firmware_types.hpp: RUNNING_RPM_THRESHOLD).
 //
 // Seeding is a separate, one-time operation — not handled here.
-class EngineHours {
+class EngineHoursSinceRebuild {
     public:
         static void setup(AppData* appData);
         static void loop();
+        static void setAndSave(float hours);   // intentional seed from operator
 
     private:
         static AppData* _appData;
@@ -27,4 +28,4 @@ class EngineHours {
         static void save();
 };
 
-#endif // ENGINE_HOURS_H
+#endif // ENGINE_HOURS_SINCE_REBUILD_H

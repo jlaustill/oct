@@ -5,7 +5,10 @@
 #include "data/cummins-bus.h"
 #include "data/pci-bus.h"
 #include "odometer.h"
-#include "engine-hours.h"
+#include "engine-hours-since-rebuild.h"
+
+#include "engine-hours-truck-lifetime.h"
+#include "serial-commands.h"
 
 #define DEBUG_PRINT_INTERVAL_MS 2000
 #define BUS_HEALTH_PCI_MS       2000
@@ -16,8 +19,8 @@ AppData OctDomain::appData = {
     .engineRpm = {0.0f, "RPM"},
     .engineTorque = {0.0f, "%"},
     .vehicleSpeed = {0.0f, "km/h"},
-    .totalVehicleDistance = {0.0f, "km"},
-    .engineTotalHours = {0.0f, "hours"},
+    .engineHoursSinceRebuild = {0.0f, "hours"},
+    .engineHoursTruckLifetime = {0.0f, "hours"},
     .vin = {{'\0'}, "VIN"},
     .coolantTemp = {0.0f, "C"},
     .batteryVoltage = {0.0f, "V"},
@@ -30,7 +33,7 @@ AppData OctDomain::appData = {
 static elapsedMillis sinceDebugPrint;
 
 static void debugPrint() {
-    float rpm, speed, battery, ambient, load, oilP, intakeT, odo, hours;
+    float rpm, speed, battery, ambient, load, oilP, intakeT, hoursSR, hoursTL;
     OctDomain::appData.engineRpm.read(rpm);
     OctDomain::appData.vehicleSpeed.read(speed);
     OctDomain::appData.batteryVoltage.read(battery);
@@ -38,8 +41,9 @@ static void debugPrint() {
     OctDomain::appData.engineLoad.read(load);
     OctDomain::appData.oilPressure.read(oilP);
     OctDomain::appData.intakeAirTemp.read(intakeT);
-    OctDomain::appData.totalVehicleDistance.read(odo);
-    OctDomain::appData.engineTotalHours.read(hours);
+    OctDomain::appData.engineHoursSinceRebuild.read(hoursSR);
+    OctDomain::appData.engineHoursTruckLifetime.read(hoursTL);
+    float odo = Odometer::km();
 
     Serial.print("RPM:");
     Serial.print(rpm, 0);
@@ -57,8 +61,10 @@ static void debugPrint() {
     Serial.print(intakeT, 1);
     Serial.print("C | Odo:");
     Serial.print(odo, 1);
-    Serial.print("km | Hrs:");
-    Serial.print(hours, 1);
+    Serial.print("km | HrsSR:");
+    Serial.print(hoursSR, 1);
+    Serial.print(" | HrsTL:");
+    Serial.print(hoursTL, 1);
 
     char vin[18];
     OctDomain::appData.vin.read(vin, 18);
@@ -81,8 +87,9 @@ void OctDomain::setup() {
     Serial.begin(115200);
     Serial.println("OCT: starting...");
 
-    Odometer::setup(&appData);
-    EngineHours::setup(&appData);
+    Odometer::setup();
+    EngineHoursSinceRebuild::setup(&appData);
+    EngineHoursTruckLifetime::setup(&appData);
 
     J1939Bus::setup(&appData);
     Serial.println("OCT: J1939 bus (CAN3/CAN_A pins 30/31) initialized");
@@ -95,17 +102,20 @@ void OctDomain::setup() {
     J1939Bus::sendAddressClaim();
     Serial.println("OCT: all PGNs broadcasting on J1939");
 
+    SerialCommands::setup();
     sinceDebugPrint = 0;
 }
 
 void OctDomain::loop() {
+    SerialCommands::loop();
     CumminsBus::loop();
     Odometer::loop();
-    EngineHours::loop();
+    EngineHoursSinceRebuild::loop();
+    EngineHoursTruckLifetime::loop();
     J1939Bus::loop();
 
     if (sinceDebugPrint >= DEBUG_PRINT_INTERVAL_MS) {
         sinceDebugPrint = 0;
-        debugPrint();
+        // debugPrint();
     }
 }

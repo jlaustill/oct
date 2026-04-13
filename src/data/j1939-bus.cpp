@@ -1,4 +1,5 @@
 #include "j1939-bus.h"
+#include "domain/odometer.h"
 
 #define BROADCAST_100MS_INTERVAL 100   // EEC1, CCVS
 #define BROADCAST_1S_INTERVAL    1000  // VD, EH
@@ -38,6 +39,7 @@ void J1939Bus::loop() {
     if (_since1sBroadcast >= BROADCAST_1S_INTERVAL) {
         _since1sBroadcast = 0;
         broadcastVD();
+        broadcastHighResolutionVehicleDistance();
         broadcastEH();
     }
 }
@@ -106,28 +108,58 @@ void J1939Bus::broadcastCCVS() {
     J1939BusCan.write(msg);
 }
 
-// PGN 65248 - VD (1s). OCT is source-of-record — always broadcast.
+// PGN 65248 - VD (1s). Source: Odometer (1/8000 mi internal storage).
+// SPN 244 Trip — not tracked, send 0xFF.
+// SPN 245 Total — convert internal raw counts to J1939 0.125 km/bit:
+//   total × (1.609344 km/mi) ÷ 8000 ÷ 0.125 km/LSB
+// = total × 1,609,344 ÷ 1,000,000,000  (uint64 intermediate)
 void J1939Bus::broadcastVD() {
-    if (_appData == nullptr) return;
-
     CAN_message_t msg;
     msg.id = 0x18FEE000;
     msg.flags.extended = true;
     msg.len = 8;
     memset(msg.buf, 0xFF, 8);
 
-    float dist;
-    _appData->totalVehicleDistance.read(dist);
-    uint32_t distRaw = (uint32_t)(dist / 0.125f);
-    msg.buf[4] = distRaw & 0xFF;
-    msg.buf[5] = (distRaw >> 8) & 0xFF;
-    msg.buf[6] = (distRaw >> 16) & 0xFF;
-    msg.buf[7] = (distRaw >> 24) & 0xFF;
+    uint32_t total = Odometer::rawCounts();
+    uint32_t j1939Raw = (uint32_t)((uint64_t)total * 1609344ULL / 1000000000ULL);
+    msg.buf[4] = j1939Raw & 0xFF;
+    msg.buf[5] = (j1939Raw >> 8) & 0xFF;
+    msg.buf[6] = (j1939Raw >> 16) & 0xFF;
+    msg.buf[7] = (j1939Raw >> 24) & 0xFF;
+
+    Serial.print("Odometer: ");
+    Serial.print(total / 8000.0f, 3);
+    Serial.println(" mi");
+
+    J1939BusCan.write(msg);
+}
+
+// PGN 65217 - HRVD (1s). Source: Odometer (1/8000 mi internal storage).
+// SPN 917: convert internal raw to J1939 5 m/bit:
+//   total × (0.000125 mi) × (1609.344 m/mi) ÷ 5 m/LSB
+// = total × 1,609,344 ÷ 40,000,000  (uint64 intermediate)
+// SPN 918 Trip — not tracked, send 0xFF.
+void J1939Bus::broadcastHighResolutionVehicleDistance() {
+    CAN_message_t msg;
+    msg.id = 0x18FEC100;
+    msg.flags.extended = true;
+    msg.len = 8;
+    memset(msg.buf, 0xFF, 8);
+
+    uint32_t total = Odometer::rawCounts();
+    uint32_t hrvdRaw = (uint32_t)((uint64_t)total * 1609344ULL / 40000000ULL);
+    msg.buf[0] = hrvdRaw & 0xFF;
+    msg.buf[1] = (hrvdRaw >> 8) & 0xFF;
+    msg.buf[2] = (hrvdRaw >> 16) & 0xFF;
+    msg.buf[3] = (hrvdRaw >> 24) & 0xFF;
 
     J1939BusCan.write(msg);
 }
 
 // PGN 65253 - EH (1s). OCT is source-of-record — always broadcast.
+// SPN 247: Engine Total Hours of Operation, 4 bytes, 0.05 h/bit.
+//          Per J1939-71 this is the LIFETIME counter, not since-rebuild.
+// SPN 249: Engine Total Revolutions — not tracked, send 0xFF.
 void J1939Bus::broadcastEH() {
     if (_appData == nullptr) return;
 
@@ -138,7 +170,29 @@ void J1939Bus::broadcastEH() {
     memset(msg.buf, 0xFF, 8);
 
     float hours;
-    _appData->engineTotalHours.read(hours);
+    _appData->engineHoursTruckLifetime.read(hours);
+    uint32_t hoursRaw = (uint32_t)(hours / 0.05f);
+    msg.buf[0] = hoursRaw & 0xFF;
+    msg.buf[1] = (hoursRaw >> 8) & 0xFF;
+    msg.buf[2] = (hoursRaw >> 16) & 0xFF;
+    msg.buf[3] = (hoursRaw >> 24) & 0xFF;
+
+    J1939BusCan.write(msg);
+}
+
+// PGN 65173 - RBI (on request only, per J1939-71).
+// SPN 1193: Engine Operation Time Since Rebuild, 4 bytes, 0.05 h/bit.
+void J1939Bus::broadcastRebuildInformation() {
+    if (_appData == nullptr) return;
+
+    CAN_message_t msg;
+    msg.id = 0x18FE9500;
+    msg.flags.extended = true;
+    msg.len = 8;
+    memset(msg.buf, 0xFF, 8);
+
+    float hours;
+    _appData->engineHoursSinceRebuild.read(hours);
     uint32_t hoursRaw = (uint32_t)(hours / 0.05f);
     msg.buf[0] = hoursRaw & 0xFF;
     msg.buf[1] = (hoursRaw >> 8) & 0xFF;
@@ -246,7 +300,9 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
             case 61444:  broadcastEEC1(); break;
             case 65265:  broadcastCCVS(); break;
             case 65248:  broadcastVD();   break;
+            case 65217:  broadcastHighResolutionVehicleDistance(); break;
             case 65253:  broadcastEH();   break;
+            case 65173:  broadcastRebuildInformation();  break;
             case 60928:  sendAddressClaim(); break;
             default:
                 Serial.print("J1939 NACK PGN:");

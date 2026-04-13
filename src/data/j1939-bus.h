@@ -37,7 +37,9 @@ class J1939Bus {
         static void broadcastEEC1();
         static void broadcastCCVS();
         static void broadcastVD();
+        static void broadcastHighResolutionVehicleDistance();
         static void broadcastEH();
+        static void broadcastRebuildInformation();
         static void processTpBam();
         static void startTpBam(uint32_t pgn, const uint8_t* data, uint8_t len);
         static void onReceive(const CAN_message_t &msg);

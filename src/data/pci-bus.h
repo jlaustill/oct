@@ -1,6 +1,7 @@
 #ifndef PCI_BUS_H
 #define PCI_BUS_H
 
+#include <Arduino.h>
 #include <J1850VPWCore.h>
 #include "app-data.h"
 
@@ -17,9 +18,9 @@
 class PciBus {
     public:
         static void setup(AppData* appData);
-        static volatile uint32_t _msgCount;
-        static volatile uint32_t _errCount;
-        static volatile uint32_t _lastRxTime;
+        static volatile uint32_t msgCount;
+        static volatile uint32_t errCount;
+        static elapsedMillis sinceLastRx;
 
     private:
         static AppData* _appData;

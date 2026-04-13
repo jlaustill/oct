@@ -6,32 +6,33 @@
 struct FloatValue {
     volatile float value;
     const char* unit;
-    volatile uint32_t lastUpdated;
+    elapsedMillis sinceUpdate;
+    volatile bool hasValue;
 
     void update(float newValue) {
         noInterrupts();
         value = newValue;
-        lastUpdated = millis();
+        sinceUpdate = 0;
+        hasValue = true;
         interrupts();
     }
 
-    float read(float& outValue) {
+    void read(float& outValue) {
         noInterrupts();
         outValue = value;
-        uint32_t ts = lastUpdated;
         interrupts();
-        return ts;
     }
 
     bool isStale(uint32_t maxAgeMs) const {
-        return (millis() - lastUpdated) > maxAgeMs;
+        return !hasValue || sinceUpdate > maxAgeMs;
     }
 };
 
 struct StringValue {
     volatile char value[18];
     const char* unit;
-    volatile uint32_t lastUpdated;
+    elapsedMillis sinceUpdate;
+    volatile bool hasValue;
 
     void update(const char* newValue) {
         noInterrupts();
@@ -40,7 +41,8 @@ struct StringValue {
             if (newValue[i] == '\0') break;
         }
         value[17] = '\0';
-        lastUpdated = millis();
+        sinceUpdate = 0;
+        hasValue = true;
         interrupts();
     }
 
@@ -55,7 +57,7 @@ struct StringValue {
     }
 
     bool isStale(uint32_t maxAgeMs) const {
-        return (millis() - lastUpdated) > maxAgeMs;
+        return !hasValue || sinceUpdate > maxAgeMs;
     }
 };
 

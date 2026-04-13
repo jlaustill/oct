@@ -1,60 +1,45 @@
 #include "j1939-bus.h"
 
+#define BROADCAST_100MS_INTERVAL 100   // EEC1, CCVS
+#define BROADCAST_1S_INTERVAL    1000  // VD, EH
+#define TP_BAM_INTERPACKET_MS    50
+
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> J1939Bus::J1939BusCan;
 AppData* J1939Bus::_appData = nullptr;
-TpBamState J1939Bus::_tp = {false, {0}, 0, 0, 0, 0, 0};
-volatile uint32_t J1939Bus::lastRxTime = 0;
+TpBamState J1939Bus::_tp = {};
+elapsedMillis J1939Bus::sinceLastRx;
+elapsedMillis J1939Bus::_since100msBroadcast;
+elapsedMillis J1939Bus::_since1sBroadcast;
 
 void J1939Bus::setup(AppData* appData) {
     _appData = appData;
 
-    // Try 250k first, then 500k
-    uint32_t baudRates[] = {250000, 500000};
-    for (int i = 0; i < 2; i++) {
-        J1939BusCan.begin();
-        J1939BusCan.setBaudRate(baudRates[i]);
-        J1939BusCan.setMaxMB(16);
-        J1939BusCan.enableFIFO();
-        J1939BusCan.enableFIFOInterrupt();
-        J1939BusCan.onReceive(onReceive);
-
-        CAN_message_t test;
-        test.id = 0x18EEFF00;
-        test.flags.extended = true;
-        test.len = 8;
-        memset(test.buf, 0x00, 8);
-        test.buf[0] = 0x01;
-
-        delay(100);
-        int result = J1939BusCan.write(test);
-        delay(50);
-        J1939BusCan.events();
-        delay(10);
-        J1939BusCan.events();
-        int result2 = J1939BusCan.write(test);
-
-        Serial.print("J1939 baud scan ");
-        Serial.print(baudRates[i]);
-        Serial.print(": write=");
-        Serial.print(result);
-        Serial.print(" second=");
-        Serial.println(result2);
-
-        if (result2 == 1) {
-            Serial.print("J1939: using ");
-            Serial.print(baudRates[i]);
-            Serial.println(" bps");
-            return;
-        }
-    }
-
-    Serial.println("J1939: WARNING - no ACK, defaulting to 250k");
     J1939BusCan.begin();
     J1939BusCan.setBaudRate(250000);
     J1939BusCan.setMaxMB(16);
     J1939BusCan.enableFIFO();
     J1939BusCan.enableFIFOInterrupt();
     J1939BusCan.onReceive(onReceive);
+
+    _since100msBroadcast = 0;
+    _since1sBroadcast = 0;
+}
+
+void J1939Bus::loop() {
+    J1939BusCan.events();
+    processTpBam();
+
+    if (_since100msBroadcast >= BROADCAST_100MS_INTERVAL) {
+        _since100msBroadcast = 0;
+        broadcastEEC1();
+        broadcastCCVS();
+    }
+
+    if (_since1sBroadcast >= BROADCAST_1S_INTERVAL) {
+        _since1sBroadcast = 0;
+        broadcastVD();
+        broadcastEH();
+    }
 }
 
 // PGN 60928 - Address Claim
@@ -77,7 +62,8 @@ void J1939Bus::sendAddressClaim() {
     Serial.println(result);
 }
 
-// PGN 61444 - EEC1 (100ms)
+// PGN 61444 - EEC1 (100ms). Broadcast 0 RPM if PCI data is stale —
+// a quiet PCI bus almost always means key-off / engine-not-running.
 void J1939Bus::broadcastEEC1() {
     if (_appData == nullptr) return;
 
@@ -87,18 +73,19 @@ void J1939Bus::broadcastEEC1() {
     msg.len = 8;
     memset(msg.buf, 0xFF, 8);
 
+    float rpm = 0.0f;
     if (!_appData->engineRpm.isStale(STALE_FAST_MS)) {
-        float rpm;
         _appData->engineRpm.read(rpm);
-        uint16_t rpmRaw = (uint16_t)(rpm / 0.125f);
-        msg.buf[3] = rpmRaw & 0xFF;
-        msg.buf[4] = (rpmRaw >> 8) & 0xFF;
     }
+    uint16_t rpmRaw = (uint16_t)(rpm / 0.125f);
+    msg.buf[3] = rpmRaw & 0xFF;
+    msg.buf[4] = (rpmRaw >> 8) & 0xFF;
 
     J1939BusCan.write(msg);
 }
 
-// PGN 65265 - CCVS (100ms)
+// PGN 65265 - CCVS (100ms). Broadcast 0 km/h if PCI data is stale —
+// a quiet PCI bus almost always means the vehicle is parked.
 void J1939Bus::broadcastCCVS() {
     if (_appData == nullptr) return;
 
@@ -108,18 +95,18 @@ void J1939Bus::broadcastCCVS() {
     msg.len = 8;
     memset(msg.buf, 0xFF, 8);
 
+    float speed = 0.0f;
     if (!_appData->vehicleSpeed.isStale(STALE_FAST_MS)) {
-        float speed;
         _appData->vehicleSpeed.read(speed);
-        uint16_t speedRaw = (uint16_t)(speed * 256.0f);
-        msg.buf[1] = speedRaw & 0xFF;
-        msg.buf[2] = (speedRaw >> 8) & 0xFF;
     }
+    uint16_t speedRaw = (uint16_t)(speed * 256.0f);
+    msg.buf[1] = speedRaw & 0xFF;
+    msg.buf[2] = (speedRaw >> 8) & 0xFF;
 
     J1939BusCan.write(msg);
 }
 
-// PGN 65248 - VD (1s)
+// PGN 65248 - VD (1s). OCT is source-of-record — always broadcast.
 void J1939Bus::broadcastVD() {
     if (_appData == nullptr) return;
 
@@ -129,20 +116,18 @@ void J1939Bus::broadcastVD() {
     msg.len = 8;
     memset(msg.buf, 0xFF, 8);
 
-    if (!_appData->totalVehicleDistance.isStale(STALE_SLOW_MS)) {
-        float dist;
-        _appData->totalVehicleDistance.read(dist);
-        uint32_t distRaw = (uint32_t)(dist / 0.125f);
-        msg.buf[4] = distRaw & 0xFF;
-        msg.buf[5] = (distRaw >> 8) & 0xFF;
-        msg.buf[6] = (distRaw >> 16) & 0xFF;
-        msg.buf[7] = (distRaw >> 24) & 0xFF;
-    }
+    float dist;
+    _appData->totalVehicleDistance.read(dist);
+    uint32_t distRaw = (uint32_t)(dist / 0.125f);
+    msg.buf[4] = distRaw & 0xFF;
+    msg.buf[5] = (distRaw >> 8) & 0xFF;
+    msg.buf[6] = (distRaw >> 16) & 0xFF;
+    msg.buf[7] = (distRaw >> 24) & 0xFF;
 
     J1939BusCan.write(msg);
 }
 
-// PGN 65253 - EH (1s)
+// PGN 65253 - EH (1s). OCT is source-of-record — always broadcast.
 void J1939Bus::broadcastEH() {
     if (_appData == nullptr) return;
 
@@ -152,15 +137,13 @@ void J1939Bus::broadcastEH() {
     msg.len = 8;
     memset(msg.buf, 0xFF, 8);
 
-    if (!_appData->engineTotalHours.isStale(STALE_SLOW_MS)) {
-        float hours;
-        _appData->engineTotalHours.read(hours);
-        uint32_t hoursRaw = (uint32_t)(hours / 0.05f);
-        msg.buf[0] = hoursRaw & 0xFF;
-        msg.buf[1] = (hoursRaw >> 8) & 0xFF;
-        msg.buf[2] = (hoursRaw >> 16) & 0xFF;
-        msg.buf[3] = (hoursRaw >> 24) & 0xFF;
-    }
+    float hours;
+    _appData->engineTotalHours.read(hours);
+    uint32_t hoursRaw = (uint32_t)(hours / 0.05f);
+    msg.buf[0] = hoursRaw & 0xFF;
+    msg.buf[1] = (hoursRaw >> 8) & 0xFF;
+    msg.buf[2] = (hoursRaw >> 16) & 0xFF;
+    msg.buf[3] = (hoursRaw >> 24) & 0xFF;
 
     J1939BusCan.write(msg);
 }
@@ -174,17 +157,15 @@ void J1939Bus::startTpBam(uint32_t pgn, const uint8_t* data, uint8_t len) {
     _tp.pgnToSend = pgn;
     _tp.totalPackets = (len + 6) / 7;
     _tp.nextPacket = 0;  // 0 = need to send BAM header first
-    _tp.lastPacketTime = 0;
+    _tp.sinceLastPacket = TP_BAM_INTERPACKET_MS;  // fire immediately
     _tp.active = true;
 }
 
-// Call from loop() - sends TP BAM packets with 50ms spacing
+// Called from loop() — sends TP BAM packets with 50ms spacing.
 void J1939Bus::processTpBam() {
     if (!_tp.active) return;
-
-    uint32_t now = millis();
-    if (now - _tp.lastPacketTime < 50) return;  // 50ms inter-packet delay
-    _tp.lastPacketTime = now;
+    if (_tp.sinceLastPacket < TP_BAM_INTERPACKET_MS) return;
+    _tp.sinceLastPacket = 0;
 
     if (_tp.nextPacket == 0) {
         // Send BAM header (TP.CM)
@@ -233,7 +214,7 @@ void J1939Bus::processTpBam() {
 }
 
 void J1939Bus::onReceive(const CAN_message_t &msg) {
-    lastRxTime = millis();
+    sinceLastRx = 0;
 
     J1939Message j1939;
     j1939.setCanId(msg.id);

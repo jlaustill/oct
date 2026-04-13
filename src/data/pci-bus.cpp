@@ -1,9 +1,9 @@
 #include "pci-bus.h"
 
 AppData* PciBus::_appData = nullptr;
-volatile uint32_t PciBus::_msgCount = 0;
-volatile uint32_t PciBus::_errCount = 0;
-volatile uint32_t PciBus::_lastRxTime = 0;
+volatile uint32_t PciBus::msgCount = 0;
+volatile uint32_t PciBus::errCount = 0;
+elapsedMillis PciBus::sinceLastRx;
 
 void PciBus::setup(AppData* appData) {
     _appData = appData;
@@ -12,15 +12,31 @@ void PciBus::setup(AppData* appData) {
     VPW.onError(onError);
     VPW.begin(J1850VPW_RX, J1850VPW_TX, ACTIVE_HIGH);
 
-    // Null-terminated filter array (J1850VPWCore iterates with while(*ids))
-    uint8_t filter[] = { PCI_MSG_PCM_ENGINE, PCI_MSG_MULTI_SENSOR, PCI_MSG_AMBIENT_TEMP, PCI_MSG_VIN, 0x00 };
-    VPW.ignoreAll();
-    VPW.listen(filter);
+    // DEBUG: listen to ALL — engine running capture
+    // uint8_t filter[] = { PCI_MSG_PCM_ENGINE, PCI_MSG_MULTI_SENSOR, PCI_MSG_AMBIENT_TEMP, PCI_MSG_VIN, 0x00 };
+    // VPW.ignoreAll();
+    // VPW.listen(filter);
 }
 
 void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
-    _msgCount++;
-    _lastRxTime = millis();
+    msgCount++;
+    sinceLastRx = 0;
+
+    // DEBUG: log only interesting messages (skip high-frequency known ones)
+    uint8_t id = message[0];
+    // Skip: 0x10 (RPM/speed), 0x35, 0x1E, 0xB0, 0xB1, 0xD1
+    // if (id != 0x10 && id != 0x35 && id != 0x1E && id != 0xB0 && id != 0xB1 && id != 0xD1) {
+    //     Serial.print("PCI ");
+    //     if (id < 0x10) Serial.print("0");
+    //     Serial.print(id, HEX);
+    //     Serial.print(": ");
+    //     for (uint8_t i = 1; i < messageLength; i++) {
+    //         if (message[i] < 0x10) Serial.print("0");
+    //         Serial.print(message[i], HEX);
+    //         Serial.print(" ");
+    //     }
+    //     Serial.println();
+    // }
 
     if (_appData == nullptr) return;
 
@@ -116,10 +132,10 @@ void PciBus::onError(J1850VPW_Operations op, J1850VPW_Errors err) {
     if (err == J1850VPW_OK) return;
     if (err == J1850VPW_ERR_IFR_NOT_SUPPORTED) return;
 
-    _errCount++;
+    errCount++;
     const char* opStr = (op == J1850VPW_Read) ? "RX" : "TX";
-    Serial.print("PCI ");
-    Serial.print(opStr);
-    Serial.print(" ERR: 0x");
-    Serial.println(err, HEX);
+    // Serial.print("PCI ");
+    // Serial.print(opStr);
+    // Serial.print(" ERR: 0x");
+    // Serial.println(err, HEX);
 }

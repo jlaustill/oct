@@ -10,6 +10,7 @@
             "includePath": [
                 "/home/linux/code/oct/include",
                 "/home/linux/code/oct/src",
+                "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/EEPROM",
                 "/home/linux/code/oct/.pio/libdeps/teensymm/J1850VPWCore/src",
                 "/home/linux/code/oct/.pio/libdeps/teensymm/FlexCAN_T4",
                 "/home/linux/code/oct/.pio/libdeps/teensymm/J1939/include",
@@ -35,7 +36,6 @@
                 "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/DS1307RTC",
                 "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/DmxSimple",
                 "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/DogLcd",
-                "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/EEPROM",
                 "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/EasyTransfer/src",
                 "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/EasyTransferI2C/src",
                 "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/Encoder",
@@ -123,6 +123,7 @@
                 "path": [
                     "/home/linux/code/oct/include",
                     "/home/linux/code/oct/src",
+                    "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/EEPROM",
                     "/home/linux/code/oct/.pio/libdeps/teensymm/J1850VPWCore/src",
                     "/home/linux/code/oct/.pio/libdeps/teensymm/FlexCAN_T4",
                     "/home/linux/code/oct/.pio/libdeps/teensymm/J1939/include",
@@ -148,7 +149,6 @@
                     "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/DS1307RTC",
                     "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/DmxSimple",
                     "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/DogLcd",
-                    "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/EEPROM",
                     "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/EasyTransfer/src",
                     "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/EasyTransferI2C/src",
                     "/home/linux/.platformio/packages/framework-arduinoteensy/libraries/Encoder",

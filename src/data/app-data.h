@@ -86,7 +86,8 @@ struct J1939NodeTable {
                 return &nodes[i];
             }
         }
-        return nullptr;  // table full
+        Serial.println("J1939 node table full!");
+        return nullptr;
     }
 
     const J1939Node* findNode(uint8_t srcAddr) const {

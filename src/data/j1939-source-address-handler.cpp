@@ -97,7 +97,8 @@ bool J1939SourceAddressHandler::onReceive(const CAN_message_t& msg) {
     uint8_t pduFormat = (msg.id >> 16) & 0xFF;
 
     if (pduFormat == 0xEE) {
-        // Incoming PGN 60928 — store the node's NAME
+        // Incoming PGN 60928 — store the node's NAME (spec requires 8 bytes)
+        if (msg.len < 8) return true;  // malformed frame — consume but ignore
         J1939Node* node = _appData->nodeTable.findOrAllocate(srcAddr);
         if (node != nullptr) {
             memcpy(node->name, msg.buf, 8);

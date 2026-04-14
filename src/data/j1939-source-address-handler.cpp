@@ -37,15 +37,10 @@ void J1939SourceAddressHandler::sendClaimRequest(uint8_t destAddr) {
     CAN_message_t msg;
     msg.id = 0x18EA0000 | ((uint32_t)destAddr << 8) | 0x00;
     msg.flags.extended = true;
-    msg.len = 8;
+    msg.len = 3;
     msg.buf[0] = 0x00;  // PGN 60928 = 0x00EE00
     msg.buf[1] = 0xEE;
     msg.buf[2] = 0x00;
-    msg.buf[3] = 0xFF;
-    msg.buf[4] = 0xFF;
-    msg.buf[5] = 0xFF;
-    msg.buf[6] = 0xFF;
-    msg.buf[7] = 0xFF;
 
     _can->write(msg);
     Serial.print("J1939 claim request -> 0x");
@@ -55,9 +50,16 @@ void J1939SourceAddressHandler::sendClaimRequest(uint8_t destAddr) {
 void J1939SourceAddressHandler::logNodes() {
     if (_appData == nullptr) return;
 
+    // Snapshot the table with interrupts disabled to avoid a torn read
+    // while onReceive (ISR context) may be writing concurrently.
+    J1939NodeTable snapshot;
+    noInterrupts();
+    snapshot = _appData->nodeTable;
+    interrupts();
+
     uint8_t count = 0;
     for (uint8_t i = 0; i < J1939_MAX_NODES; i++) {
-        if (_appData->nodeTable.nodes[i].inUse) count++;
+        if (snapshot.nodes[i].inUse) count++;
     }
 
     Serial.print("J1939 Nodes (");
@@ -65,7 +67,7 @@ void J1939SourceAddressHandler::logNodes() {
     Serial.println(" known):");
 
     for (uint8_t i = 0; i < J1939_MAX_NODES; i++) {
-        const J1939Node& node = _appData->nodeTable.nodes[i];
+        const J1939Node& node = snapshot.nodes[i];
         if (!node.inUse) continue;
 
         Serial.print("  src:");
@@ -99,7 +101,6 @@ bool J1939SourceAddressHandler::onReceive(const CAN_message_t& msg) {
         J1939Node* node = _appData->nodeTable.findOrAllocate(srcAddr);
         if (node != nullptr) {
             memcpy(node->name, msg.buf, 8);
-            node->inUse   = true;
             node->claimed = true;
         }
         Serial.print("J1939 ADDRESS CLAIM src:0x");
@@ -109,12 +110,9 @@ bool J1939SourceAddressHandler::onReceive(const CAN_message_t& msg) {
 
     // For any other message, request a claim from sources we haven't heard from yet
     J1939Node* node = _appData->nodeTable.findOrAllocate(srcAddr);
-    if (node != nullptr) {
-        node->inUse = true;
-        if (!node->requestSent) {
-            sendClaimRequest(srcAddr);
-            node->requestSent = true;
-        }
+    if (node != nullptr && !node->requestSent) {
+        sendClaimRequest(srcAddr);
+        node->requestSent = true;
     }
 
     return false;

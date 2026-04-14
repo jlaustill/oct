@@ -82,6 +82,7 @@ struct J1939NodeTable {
             if (!nodes[i].inUse) {
                 nodes[i] = {};
                 nodes[i].sourceAddress = srcAddr;
+                nodes[i].inUse = true;
                 return &nodes[i];
             }
         }

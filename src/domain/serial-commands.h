@@ -11,6 +11,8 @@
 //   odometer=<km>                     — set totalVehicleDistance (km)
 //   engineHoursSinceRebuild=<hours>   — set since-rebuild counter
 //   engineHoursTruckLifetime=<hours>  — set lifetime counter
+//   log=J1939Nodes                    — print known J1939 nodes to Serial
+//   log=help                          — print all supported commands
 class SerialCommands {
     public:
         static void setup();

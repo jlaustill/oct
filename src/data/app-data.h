@@ -61,6 +61,46 @@ struct StringValue {
     }
 };
 
+#define J1939_MAX_NODES 16
+
+struct J1939Node {
+    uint8_t sourceAddress;
+    uint8_t name[8];
+    bool    inUse;        // slot is occupied
+    bool    claimed;      // NAME received via PGN 60928
+    bool    requestSent;  // PGN 59904 already sent — don't send again
+};
+
+struct J1939NodeTable {
+    J1939Node nodes[J1939_MAX_NODES];
+
+    J1939Node* findOrAllocate(uint8_t srcAddr) {
+        for (uint8_t i = 0; i < J1939_MAX_NODES; i++) {
+            if (nodes[i].inUse && nodes[i].sourceAddress == srcAddr) return &nodes[i];
+        }
+        for (uint8_t i = 0; i < J1939_MAX_NODES; i++) {
+            if (!nodes[i].inUse) {
+                nodes[i] = {};
+                nodes[i].sourceAddress = srcAddr;
+                return &nodes[i];
+            }
+        }
+        return nullptr;  // table full
+    }
+
+    const J1939Node* findNode(uint8_t srcAddr) const {
+        for (uint8_t i = 0; i < J1939_MAX_NODES; i++) {
+            if (nodes[i].inUse && nodes[i].sourceAddress == srcAddr) return &nodes[i];
+        }
+        return nullptr;
+    }
+
+    bool isClaimed(uint8_t srcAddr) const {
+        const J1939Node* node = findNode(srcAddr);
+        return node != nullptr && node->claimed;
+    }
+};
+
 struct AppData {
     // EEC1 - PGN 61444 (broadcast 100ms)
     FloatValue engineRpm;       // RPM
@@ -88,6 +128,9 @@ struct AppData {
     FloatValue engineLoad;      // %
     FloatValue oilPressure;     // kPa
     FloatValue intakeAirTemp;   // degrees C
+
+    // J1939 node address claim table
+    J1939NodeTable nodeTable;
 };
 
 #endif // APP_DATA_H

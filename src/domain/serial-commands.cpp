@@ -2,6 +2,7 @@
 #include "odometer.h"
 #include "engine-hours-since-rebuild.h"
 #include "engine-hours-truck-lifetime.h"
+#include "data/j1939-source-address-handler.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -71,6 +72,24 @@ void SerialCommands::handleLine(const char* line) {
         Serial.print("CMD: engineHoursTruckLifetime set to ");
         Serial.print(hours, 3);
         Serial.println(" hrs");
+        return;
+    }
+
+    if (keyLen == 3 && strncmp(line, "log", 3) == 0) {
+        if (strcmp(value, "J1939Nodes") == 0) {
+            J1939SourceAddressHandler::logNodes();
+        } else if (strcmp(value, "help") == 0) {
+            Serial.println("Serial commands:");
+            Serial.println("  odometer=<km>                    — set total vehicle distance");
+            Serial.println("  engineHoursSinceRebuild=<hours>  — set since-rebuild counter");
+            Serial.println("  engineHoursTruckLifetime=<hours> — set lifetime counter");
+            Serial.println("  log=J1939Nodes                   — print known J1939 nodes");
+            Serial.println("  log=help                         — print this help");
+        } else {
+            Serial.print("CMD: unknown log target '");
+            Serial.print(value);
+            Serial.println("'");
+        }
         return;
     }
 

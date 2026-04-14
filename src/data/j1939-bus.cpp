@@ -14,6 +14,7 @@ elapsedMillis J1939Bus::_since1sBroadcast;
 
 void J1939Bus::setup(AppData* appData) {
     _appData = appData;
+    J1939SourceAddressHandler::setup(appData, &J1939BusCan);
 
     J1939BusCan.begin();
     J1939BusCan.setBaudRate(250000);
@@ -42,26 +43,6 @@ void J1939Bus::loop() {
         broadcastHighResolutionVehicleDistance();
         broadcastEH();
     }
-}
-
-// PGN 60928 - Address Claim
-void J1939Bus::sendAddressClaim() {
-    CAN_message_t msg;
-    msg.id = 0x18EEFF00;
-    msg.flags.extended = true;
-    msg.len = 8;
-    msg.buf[0] = 0x01;
-    msg.buf[1] = 0x00;
-    msg.buf[2] = 0x00;
-    msg.buf[3] = 0x00;
-    msg.buf[4] = 0x00;
-    msg.buf[5] = 0x00;  // Function = Engine
-    msg.buf[6] = 0x00;
-    msg.buf[7] = 0x00;
-
-    int result = J1939BusCan.write(msg);
-    Serial.print("J1939 Address Claim write: ");
-    Serial.println(result);
 }
 
 // PGN 61444 - EEC1 (100ms). Broadcast 0 RPM if PCI data is stale —
@@ -265,6 +246,7 @@ void J1939Bus::processTpBam() {
 
 void J1939Bus::onReceive(const CAN_message_t &msg) {
     sinceLastRx = 0;
+    if (J1939SourceAddressHandler::onReceive(msg)) return;
 
     J1939Message j1939;
     j1939.setCanId(msg.id);
@@ -296,7 +278,7 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
             case 65217:  broadcastHighResolutionVehicleDistance(); break;
             case 65253:  broadcastEH();   break;
             case 65173:  broadcastRebuildInformation();  break;
-            case 60928:  sendAddressClaim(); break;
+            case 60928:  J1939SourceAddressHandler::sendOwnClaim(); break;
             default:
                 Serial.print("J1939 UNHANDLED REQ PGN:");
                 Serial.println(requestedPgn);

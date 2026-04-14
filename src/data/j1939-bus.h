@@ -5,6 +5,7 @@
 #include <FlexCAN_T4.h>
 #include <J1939Message.h>
 #include "app-data.h"
+#include "j1939-source-address-handler.h"
 
 // EEC1, CCVS values come from PCI — stale if PCI goes quiet
 #define STALE_FAST_MS 500
@@ -24,7 +25,6 @@ class J1939Bus {
     public:
         static void setup(AppData* appData);
         static void loop();                  // owns all broadcast timing
-        static void sendAddressClaim();
         static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> J1939BusCan;
         static elapsedMillis sinceLastRx;
 

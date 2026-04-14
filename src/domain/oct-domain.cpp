@@ -2,6 +2,7 @@
 #include <Arduino.h>
 
 #include "data/j1939-bus.h"
+#include "data/j1939-source-address-handler.h"
 #include "data/cummins-bus.h"
 #include "data/pci-bus.h"
 #include "odometer.h"
@@ -99,7 +100,7 @@ void OctDomain::setup() {
     Serial.println("OCT: PCI bus initialized");
 
     Serial.println("OCT: sending address claim...");
-    J1939Bus::sendAddressClaim();
+    J1939SourceAddressHandler::sendOwnClaim();
     Serial.println("OCT: all PGNs broadcasting on J1939");
 
     SerialCommands::setup();

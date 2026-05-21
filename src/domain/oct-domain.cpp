@@ -5,6 +5,7 @@
 #include "data/j1939-source-address-handler.h"
 #include "data/cummins-bus.h"
 #include "data/pci-bus.h"
+#include "data/cm848-broadcast-controller.h"
 #include "odometer.h"
 #include "engine-hours-since-rebuild.h"
 
@@ -85,6 +86,14 @@ static void debugPrint() {
     Serial.print(" CUMMINS:");
     Serial.print((CumminsBus::sinceLastRx < BUS_HEALTH_CUMMINS_MS) ? "GOOD" : "BAD");
 
+    static const char* BC_STATE_NAMES[] = {"IDLE","WAIT_0A","WAIT_07","WAIT_05","ENABLED","CHECK_PROT"};
+    uint8_t bcState = Cm848BroadcastController::state();
+    Serial.print(" | BC:");
+    Serial.print(bcState < 6 ? BC_STATE_NAMES[bcState] : "?");
+    Serial.print(" EEC1:");
+    Serial.print(Cm848BroadcastController::msSinceEec1());
+    Serial.print("ms");
+
     Serial.println();
 }
 
@@ -100,6 +109,7 @@ void OctDomain::setup() {
     Serial.println("OCT: J1939 bus (CAN3/CAN_A pins 30/31) initialized");
     CumminsBus::setup(&appData);
     Serial.println("OCT: Cummins bus (CAN2/CAN_B) initialized");
+    Cm848BroadcastController::setup();
     PciBus::setup(&appData);
     Serial.println("OCT: PCI bus initialized");
 
@@ -116,6 +126,7 @@ void OctDomain::setup() {
 void OctDomain::loop() {
     SerialCommands::loop();
     CumminsBus::loop();
+    Cm848BroadcastController::loop();
     Odometer::loop();
     EngineHoursSinceRebuild::loop();
     EngineHoursTruckLifetime::loop();

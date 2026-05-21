@@ -3,6 +3,8 @@
 #include "engine-hours-since-rebuild.h"
 #include "engine-hours-truck-lifetime.h"
 #include "data/j1939-source-address-handler.h"
+#include "data/pci-bus.h"
+#include "data/cummins-bus.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -78,12 +80,18 @@ void SerialCommands::handleLine(const char* line) {
     if (keyLen == 3 && strncmp(line, "log", 3) == 0) {
         if (strcmp(value, "J1939Nodes") == 0) {
             J1939SourceAddressHandler::logNodes();
+        } else if (strcmp(value, "pciRaw") == 0) {
+            PciBus::startRawLog(15000);
+        } else if (strcmp(value, "clipRaw") == 0) {
+            CumminsBus::startRawLog(10000);
         } else if (strcmp(value, "help") == 0) {
             Serial.println("Serial commands:");
             Serial.println("  odometer=<km>                    — set total vehicle distance");
             Serial.println("  engineHoursSinceRebuild=<hours>  — set since-rebuild counter");
             Serial.println("  engineHoursTruckLifetime=<hours> — set lifetime counter");
             Serial.println("  log=J1939Nodes                   — print known J1939 nodes");
+            Serial.println("  log=pciRaw                       — dump raw bytes for PCI msgs (15s)");
+            Serial.println("  log=clipRaw                      — dump raw Cummins CLIP responses (10s)");
             Serial.println("  log=help                         — print this help");
         } else {
             Serial.print("CMD: unknown log target '");

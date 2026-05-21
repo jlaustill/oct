@@ -5,9 +5,14 @@ AppData* PciBus::_appData = nullptr;
 volatile uint32_t PciBus::msgCount = 0;
 volatile uint32_t PciBus::errCount = 0;
 elapsedMillis PciBus::sinceLastRx;
+bool PciBus::_rawLogActive = false;
+elapsedMillis PciBus::_rawLogTimer;
+uint32_t PciBus::_rawLogDurationMs = 0;
 
 void PciBus::setup(AppData* appData) {
     _appData = appData;
+
+    _rawLogActive = false;
 
     VPW.onMessageReceived(onMessageReceived);
     VPW.onError(onError);
@@ -19,9 +24,66 @@ void PciBus::setup(AppData* appData) {
     // VPW.listen(filter);
 }
 
+void PciBus::sendShiftLever(uint8_t gearByte) {
+    uint8_t msg[] = {PCI_MSG_SHIFT_LEVER, gearByte, 0x00};
+    VPW.write(msg, sizeof(msg));
+}
+
+void PciBus::startRawLog(uint32_t durationMs) {
+    _rawLogDurationMs = durationMs;
+    _rawLogTimer = 0;
+    _rawLogActive = true;
+    Serial.print("PRND capture active for ");
+    Serial.print(durationMs / 1000);
+    Serial.println("s — shift P/R/N/D/1/2 slowly, one line per change");
+    Serial.println("  0x37 = cluster display  |  0x3A = engaged gear");
+}
+
+static void printGearMsg(const char* label, uint8_t* message, uint8_t messageLength) {
+    Serial.print(label);
+    Serial.print(" len=");
+    Serial.print(messageLength);
+    for (uint8_t i = 1; i < messageLength - 1; i++) {
+        Serial.print("  b");
+        Serial.print(i);
+        Serial.print("=0x");
+        if (message[i] < 0x10) Serial.print("0");
+        Serial.print(message[i], HEX);
+    }
+    Serial.println();
+}
+
+static bool gearMsgChanged(uint8_t* last, uint8_t* lastLen, uint8_t* message, uint8_t messageLength) {
+    uint8_t dataLen = (messageLength > 1) ? messageLength - 1 : 0;
+    bool changed = (dataLen != *lastLen);
+    for (uint8_t i = 0; i < dataLen && i < 8; i++) {
+        if (message[i] != last[i]) { changed = true; }
+    }
+    if (changed) {
+        *lastLen = dataLen;
+        for (uint8_t i = 0; i < dataLen && i < 8; i++) last[i] = message[i];
+    }
+    return changed;
+}
+
 void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
     msgCount++;
     sinceLastRx = 0;
+
+    if (_rawLogActive) {
+        if (_rawLogTimer >= _rawLogDurationMs) {
+            _rawLogActive = false;
+            Serial.println("PRND capture done");
+        } else if (message[0] == PCI_MSG_SHIFT_LEVER) {
+            static uint8_t last[8]; static uint8_t lastLen = 0;
+            if (gearMsgChanged(last, &lastLen, message, messageLength))
+                printGearMsg("0x37", message, messageLength);
+        } else if (message[0] == PCI_MSG_TRANS_GEAR) {
+            static uint8_t last[8]; static uint8_t lastLen = 0;
+            if (gearMsgChanged(last, &lastLen, message, messageLength))
+                printGearMsg("0x3A", message, messageLength);
+        }
+    }
 
     // DEBUG: log unknown messages (re-enable if diagnosing a new PCI ID)
     // uint8_t id = message[0];
@@ -54,9 +116,9 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
             float speedKmh = speedRaw / 128.0f;
             _appData->vehicleSpeed.update(speedKmh);
 
-            // Byte 5: Engine load (raw 0-255 → 0-100%)
-            float loadPct = (message[5] / 255.0f) * 100.0f;
-            _appData->engineLoad.update(loadPct);
+            // Byte 5: Engine load — inaccurate; sourced from Cummins CLIP instead
+            // float loadPct = (message[5] / 255.0f) * 100.0f;
+            // _appData->engineLoad.update(loadPct);
 
             break;
         }

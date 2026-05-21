@@ -215,12 +215,6 @@ void J1939Bus::processTpBam() {
         J1939BusCan.write(bam);
 
         _tp.nextPacket = 1;
-        Serial.print("TP BAM start PGN:");
-        Serial.print(_tp.pgnToSend);
-        Serial.print(" len:");
-        Serial.print(_tp.dataLen);
-        Serial.print(" pkts:");
-        Serial.println(_tp.totalPackets);
     } else {
         // Send data packet
         CAN_message_t dt;
@@ -237,7 +231,6 @@ void J1939Bus::processTpBam() {
 
         if (_tp.nextPacket >= _tp.totalPackets) {
             _tp.active = false;  // done
-            Serial.println("TP BAM complete");
         } else {
             _tp.nextPacket++;
         }
@@ -287,16 +280,4 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
         return;
     }
 
-    // Log other J1939 traffic
-    Serial.print("J1939 RX ID:0x");
-    Serial.print(msg.id, HEX);
-    Serial.print(" [");
-    Serial.print(msg.len);
-    Serial.print("]: ");
-    for (uint8_t i = 0; i < msg.len; i++) {
-        if (msg.buf[i] < 0x10) Serial.print("0");
-        Serial.print(msg.buf[i], HEX);
-        Serial.print(" ");
-    }
-    Serial.println();
 }

@@ -128,6 +128,7 @@ struct AppData {
 
     // Additional PCI data
     FloatValue engineLoad;      // %
+    FloatValue appsPercent;     // %
     FloatValue oilPressure;     // kPa
     FloatValue intakeAirTemp;   // degrees C
 

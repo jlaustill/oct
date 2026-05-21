@@ -27,6 +27,7 @@ AppData OctDomain::appData = {
     .batteryVoltage = {0.0f, "V"},
     .ambientTemp = {0.0f, "C"},
     .engineLoad = {0.0f, "%"},
+    .appsPercent = {0.0f, "%"},
     .oilPressure = {0.0f, "kPa"},
     .intakeAirTemp = {0.0f, "C"}
 };
@@ -34,12 +35,13 @@ AppData OctDomain::appData = {
 static elapsedMillis sinceDebugPrint;
 
 static void debugPrint() {
-    float rpm, speed, battery, ambient, load, oilP, intakeT, hoursSR, hoursTL;
+    float rpm, speed, battery, ambient, load, apps, oilP, intakeT, hoursSR, hoursTL;
     OctDomain::appData.engineRpm.read(rpm);
     OctDomain::appData.vehicleSpeed.read(speed);
     OctDomain::appData.batteryVoltage.read(battery);
     OctDomain::appData.ambientTemp.read(ambient);
     OctDomain::appData.engineLoad.read(load);
+    OctDomain::appData.appsPercent.read(apps);
     OctDomain::appData.oilPressure.read(oilP);
     OctDomain::appData.intakeAirTemp.read(intakeT);
     OctDomain::appData.engineHoursSinceRebuild.read(hoursSR);
@@ -56,6 +58,8 @@ static void debugPrint() {
     Serial.print(ambient, 1);
     Serial.print("C | Load:");
     Serial.print(load, 1);
+    Serial.print("% | APPS:");
+    Serial.print(apps, 1);
     Serial.print("% | Oil:");
     Serial.print(oilP, 0);
     Serial.print("kPa | IAT:");
@@ -99,6 +103,8 @@ void OctDomain::setup() {
     PciBus::setup(&appData);
     Serial.println("OCT: PCI bus initialized");
 
+
+
     Serial.println("OCT: sending address claim...");
     J1939SourceAddressHandler::sendOwnClaim();
     Serial.println("OCT: all PGNs broadcasting on J1939");
@@ -117,6 +123,6 @@ void OctDomain::loop() {
 
     if (sinceDebugPrint >= DEBUG_PRINT_INTERVAL_MS) {
         sinceDebugPrint = 0;
-        // debugPrint();
+        debugPrint();
     }
 }

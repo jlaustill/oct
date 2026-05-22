@@ -55,8 +55,8 @@ void EngineHoursTruckLifetime::load() {
 
 void EngineHoursTruckLifetime::accumulate() {
     float rpm;
-    _appData->engineRpm.read(rpm);
-    if (rpm <= RUNNING_RPM_THRESHOLD || _appData->engineRpm.isStale(RPM_STALE_MS)) return;
+    _appData->ecu.engineRpm.read(rpm);
+    if (rpm <= RUNNING_RPM_THRESHOLD || _appData->ecu.engineRpm.isStale(RPM_STALE_MS)) return;
 
     float hours;
     _appData->engineHoursTruckLifetime.read(hours);

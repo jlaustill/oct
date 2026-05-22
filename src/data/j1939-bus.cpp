@@ -33,43 +33,50 @@ void J1939Bus::loop() {
 
     if (_since100msBroadcast >= BROADCAST_100MS_INTERVAL) {
         _since100msBroadcast = 0;
-        broadcastEEC1();
-        broadcastCCVS();
+        broadcast65265();
     }
 
     if (_since1sBroadcast >= BROADCAST_1S_INTERVAL) {
         _since1sBroadcast = 0;
-        broadcastVD();
-        broadcastHighResolutionVehicleDistance();
-        broadcastEH();
+        broadcast65262();
+        broadcast65248();
+        broadcast65217();
+        broadcast65253();
     }
 }
 
-// PGN 61444 - EEC1 (100ms). Broadcast 0 RPM if PCI data is stale —
-// a quiet PCI bus almost always means key-off / engine-not-running.
-void J1939Bus::broadcastEEC1() {
+// PGN 65262 - ET1 (1s).
+// SPN 110: buf[0],   coolant temp,    1°C/bit,      -40°C offset
+// SPN 176: buf[4-5], turbo oil temp,  0.03125°C/bit, -273°C offset (from turbo1 controller)
+void J1939Bus::broadcast65262() {
     if (_appData == nullptr) return;
 
     CAN_message_t msg;
-    msg.id = 0x0CF00400;
+    msg.id = 0x18FEEE00;
     msg.flags.extended = true;
     msg.len = 8;
     memset(msg.buf, 0xFF, 8);
 
-    float rpm = 0.0f;
-    if (!_appData->engineRpm.isStale(STALE_FAST_MS)) {
-        _appData->engineRpm.read(rpm);
+    if (!_appData->ecu.coolantTemp.isStale(5000)) {
+        float clt;
+        _appData->ecu.coolantTemp.read(clt);
+        msg.buf[0] = (uint8_t)(clt + 40.0f);
     }
-    uint16_t rpmRaw = (uint16_t)(rpm / 0.125f);
-    msg.buf[3] = rpmRaw & 0xFF;
-    msg.buf[4] = (rpmRaw >> 8) & 0xFF;
+
+    if (!_appData->turbo1.turboOilTemp.isStale(5000)) {
+        float tot;
+        _appData->turbo1.turboOilTemp.read(tot);
+        uint16_t raw = (uint16_t)((tot + 273.0f) / 0.03125f);
+        msg.buf[4] = raw & 0xFF;
+        msg.buf[5] = (raw >> 8) & 0xFF;
+    }
 
     J1939BusCan.write(msg);
 }
 
 // PGN 65265 - CCVS (100ms). Broadcast 0 km/h if PCI data is stale —
 // a quiet PCI bus almost always means the vehicle is parked.
-void J1939Bus::broadcastCCVS() {
+void J1939Bus::broadcast65265() {
     if (_appData == nullptr) return;
 
     CAN_message_t msg;
@@ -79,8 +86,8 @@ void J1939Bus::broadcastCCVS() {
     memset(msg.buf, 0xFF, 8);
 
     float speed = 0.0f;
-    if (!_appData->vehicleSpeed.isStale(STALE_FAST_MS)) {
-        _appData->vehicleSpeed.read(speed);
+    if (!_appData->pci.vehicleSpeed.isStale(STALE_FAST_MS)) {
+        _appData->pci.vehicleSpeed.read(speed);
     }
     uint16_t speedRaw = (uint16_t)(speed * 256.0f);
     msg.buf[1] = speedRaw & 0xFF;
@@ -94,7 +101,7 @@ void J1939Bus::broadcastCCVS() {
 // SPN 245 Total — convert internal raw counts to J1939 0.125 km/bit:
 //   total × (1.609344 km/mi) ÷ 8000 ÷ 0.125 km/LSB
 // = total × 1,609,344 ÷ 1,000,000,000  (uint64 intermediate)
-void J1939Bus::broadcastVD() {
+void J1939Bus::broadcast65248() {
     CAN_message_t msg;
     msg.id = 0x18FEE000;
     msg.flags.extended = true;
@@ -116,7 +123,7 @@ void J1939Bus::broadcastVD() {
 //   total × (0.000125 mi) × (1609.344 m/mi) ÷ 5 m/LSB
 // = total × 1,609,344 ÷ 40,000,000  (uint64 intermediate)
 // SPN 918 Trip — not tracked, send 0xFF.
-void J1939Bus::broadcastHighResolutionVehicleDistance() {
+void J1939Bus::broadcast65217() {
     CAN_message_t msg;
     msg.id = 0x18FEC100;
     msg.flags.extended = true;
@@ -137,7 +144,7 @@ void J1939Bus::broadcastHighResolutionVehicleDistance() {
 // SPN 247: Engine Total Hours of Operation, 4 bytes, 0.05 h/bit.
 //          Per J1939-71 this is the LIFETIME counter, not since-rebuild.
 // SPN 249: Engine Total Revolutions — not tracked, send 0xFF.
-void J1939Bus::broadcastEH() {
+void J1939Bus::broadcast65253() {
     if (_appData == nullptr) return;
 
     CAN_message_t msg;
@@ -159,7 +166,7 @@ void J1939Bus::broadcastEH() {
 
 // PGN 65173 - RBI (on request only, per J1939-71).
 // SPN 1193: Engine Operation Time Since Rebuild, 4 bytes, 0.05 h/bit.
-void J1939Bus::broadcastRebuildInformation() {
+void J1939Bus::broadcast65173() {
     if (_appData == nullptr) return;
 
     CAN_message_t msg;
@@ -252,7 +259,7 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
             case 65260: {  // Vehicle Identification (VIN)
                 if (_appData != nullptr) {
                     char vin[18];
-                    _appData->vin.read(vin, 18);
+                    _appData->pci.vin.read(vin, 18);
                     if (vin[0] != '\0') {
                         startTpBam(0x00FEEC, (const uint8_t*)vin, 17);
                     }
@@ -265,12 +272,12 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
                 startTpBam(0x00FEEB, (const uint8_t*)compId, strlen(compId));
                 break;
             }
-            case 61444:  broadcastEEC1(); break;
-            case 65265:  broadcastCCVS(); break;
-            case 65248:  broadcastVD();   break;
-            case 65217:  broadcastHighResolutionVehicleDistance(); break;
-            case 65253:  broadcastEH();   break;
-            case 65173:  broadcastRebuildInformation();  break;
+            case 65262:  broadcast65262();  break;
+            case 65265:  broadcast65265(); break;
+            case 65248:  broadcast65248();   break;
+            case 65217:  broadcast65217(); break;
+            case 65253:  broadcast65253();   break;
+            case 65173:  broadcast65173();  break;
             case 60928:  J1939SourceAddressHandler::sendOwnClaim(); break;
             default:
                 Serial.print("J1939 UNHANDLED REQ PGN:");
@@ -278,6 +285,23 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
                 break;
         }
         return;
+    }
+
+    // Parse PDU2 broadcast data from other J1939 nodes
+    if (j1939.pduFormat >= 0xF0 && msg.len >= 8 && _appData != nullptr) {
+        uint8_t src = msg.id & 0xFF;
+        uint16_t pgn = ((uint16_t)j1939.pduFormat << 8) | j1939.pduSpecific;
+        switch (pgn) {
+            case 65262: {
+                // ET1 from turbo controller — SPN 176 turbo oil temp, buf[4-5] LE, 0.03125°C/bit, -273°C offset
+                if (src != 0x00) {  // ignore our own rebroadcast
+                    uint16_t raw = (uint16_t)msg.buf[4] | ((uint16_t)msg.buf[5] << 8);
+                    if (raw < 0xFE00u)
+                        _appData->turbo1.turboOilTemp.update(raw * 0.03125f - 273.0f);
+                }
+                break;
+            }
+        }
     }
 
 }

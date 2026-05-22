@@ -229,10 +229,6 @@ void CumminsBus::sendDTs() {
     uint8_t payload[10];
     cm848InverseCipher(target, payload);
 
-    Serial.print("Cummins: sendDTs payload:");
-    for (int i = 0; i < 10; i++) { Serial.print(" "); Serial.print(payload[i], HEX); }
-    Serial.println();
-
     CAN_message_t dt1, dt2;
 
     dt1.id = TP_DT_TX_ID;
@@ -287,7 +283,6 @@ void CumminsBus::advanceWakeup() {
             if (action == WA_EOM_RXED) {
                 _wakeupState = WS_ARMED;
                 _sinceWakeup = 0;
-                Serial.println("Cummins: security handshake OK — armed");
             }
             break;
         default:
@@ -323,21 +318,6 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
     if (Cm848J1939Receiver::onReceive(msg, _appData)) {
         J1939Bus::J1939BusCan.write(msg);
         return;
-    }
-
-    // Only log CLIP protocol frames — ECU J1939 broadcasts flood serial at 100ms intervals
-    if (msg.id == CLIP_RESPONSE_ID || msg.id == TP_CM_RX_ID || msg.id == TP_DT_RX_ID) {
-        Serial.print("CUMMINS RX id=0x");
-        Serial.print(msg.id, HEX);
-        Serial.print(" len=");
-        Serial.print(msg.len);
-        Serial.print(" data:");
-        for (uint8_t i = 0; i < msg.len; i++) {
-            Serial.print(" ");
-            if (msg.buf[i] < 0x10) Serial.print("0");
-            Serial.print(msg.buf[i], HEX);
-        }
-        Serial.println();
     }
 
     if (_rawLogActive) {
@@ -400,9 +380,9 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
 
     if (addr == CLIP_ADDR_APPS && len >= 2) {
         uint16_t raw = ((uint16_t)msg.buf[6] << 8) | msg.buf[7];
-        _appData->appsPercent.update((float)raw * 100.0f / 65535.0f);
+        _appData->ecu.appsPercent.update((float)raw * 100.0f / 65535.0f);
     } else if (addr == CLIP_ADDR_LOAD && len >= 2) {
         uint16_t raw = ((uint16_t)msg.buf[6] << 8) | msg.buf[7];
-        _appData->engineLoad.update((float)raw);
+        _appData->ecu.engineLoad.update((float)raw);
     }
 }

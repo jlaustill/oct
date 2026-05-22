@@ -66,9 +66,9 @@ struct StringValue {
 struct J1939Node {
     uint8_t sourceAddress;
     uint8_t name[8];
-    bool    inUse;        // slot is occupied
-    bool    claimed;      // NAME received via PGN 60928
-    bool    requestSent;  // PGN 59904 already sent — don't send again
+    bool    inUse;
+    bool    claimed;
+    bool    requestSent;
 };
 
 struct J1939NodeTable {
@@ -103,36 +103,56 @@ struct J1939NodeTable {
     }
 };
 
+// Data received from the Cummins ECU via J1939 broadcasts and CLIP protocol
+struct EcuData {
+    FloatValue engineRpm;            // EEC1 PGN 61444 SPN 190, 100ms
+    FloatValue engineTorqueMode;     // EEC1 PGN 61444 SPN 899,  100ms (enum 0-14)
+    FloatValue driverDemandTorque;   // EEC1 PGN 61444 SPN 512,  100ms
+    FloatValue engineTorque;         // EEC1 PGN 61444 SPN 513+4154, 100ms
+    // EEC2 PGN 61443 — byte 0 bit fields
+    FloatValue accelPedal1LowIdleSwitch;     // SPN 558,  bits 0-1: 0=not idle, 1=idle
+    FloatValue accelPedalKickdownSwitch;     // SPN 559,  bits 2-3: 0=passive, 1=active
+    FloatValue roadSpeedLimitStatus;         // SPN 1437, bits 4-5: 0=active, 1=not active
+    FloatValue accelPedal2LowIdleSwitch;     // SPN 2970, bits 6-7: 0=not idle, 1=idle
+    // EEC2 PGN 61443 — byte fields
+    FloatValue appsPercent;     // SPN 91,  byte 1, 0.4%/bit / CLIP, 100ms
+    FloatValue engineLoad;      // SPN 92,  byte 2, 1%/bit   / CLIP, 100ms
+    // Other PGNs
+    FloatValue coolantTemp;     // ET1 PGN 65262 SPN 110, 1s
+    FloatValue fuelTemp;        // ET1 PGN 65262 SPN 174, 1s
+    FloatValue oilTemp;         // ET1 PGN 65262 SPN 175, 1s
+    FloatValue intakeAirTemp;   // ET1 PGN 65262 SPN 52 / IC1 PGN 65270, 500ms-1s
+    FloatValue oilPressure;     // EFL/P1 PGN 65263, 500ms
+    FloatValue batteryVoltage;  // VEP1 PGN 65271, 1s
+    FloatValue ambientTemp;     // AMB PGN 65269, 1s
+};
+
+// Data received from the PCI (J1850 VPW) bus
+struct PciData {
+    FloatValue engineRpm;       // 0x10 PCM Engine
+    FloatValue vehicleSpeed;    // 0x10 PCM Engine
+    FloatValue coolantTemp;     // 0xC0 Multi-sensor
+    FloatValue batteryVoltage;  // 0xC0 Multi-sensor
+    FloatValue oilPressure;     // 0xC0 Multi-sensor
+    FloatValue intakeAirTemp;   // 0xC0 Multi-sensor
+    FloatValue ambientTemp;     // 0xCD Ambient temp
+    StringValue vin;            // 0xF0 VIN
+};
+
+// Data received from turbo controllers on J1939
+struct TurboData {
+    FloatValue turboOilTemp;    // ET1 PGN 65262 SPN 176, 1s
+};
+
 struct AppData {
-    // EEC1 - PGN 61444 (broadcast 100ms)
-    FloatValue engineRpm;       // RPM
-    FloatValue engineTorque;    // %
+    EcuData ecu;
+    PciData pci;
+    TurboData turbo1;
 
-    // CCVS - PGN 65265 (broadcast 100ms)
-    FloatValue vehicleSpeed;    // km/h
+    // Engine hours are EEPROM-persisted counters, managed by their own classes
+    FloatValue engineHoursSinceRebuild;
+    FloatValue engineHoursTruckLifetime;
 
-    // VD - PGN 65248 (broadcast 1s) — owned by Odometer class, not stored here
-
-    // EH - PGN 65253 (broadcast 1s) — resets on engine rebuild
-    FloatValue engineHoursSinceRebuild;  // hours
-    // Lifetime counter — never reset
-    FloatValue engineHoursTruckLifetime; // hours
-
-    // VI - PGN 65260 (on request)
-    StringValue vin;
-
-    // ET1 - PGN 65262 (future: broadcast 1s)
-    FloatValue coolantTemp;     // degrees C
-    FloatValue batteryVoltage;  // volts
-    FloatValue ambientTemp;     // degrees C
-
-    // Additional PCI data
-    FloatValue engineLoad;      // %
-    FloatValue appsPercent;     // %
-    FloatValue oilPressure;     // kPa
-    FloatValue intakeAirTemp;   // degrees C
-
-    // J1939 node address claim table
     J1939NodeTable nodeTable;
 };
 

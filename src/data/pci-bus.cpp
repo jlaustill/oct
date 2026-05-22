@@ -109,16 +109,16 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
 
             // Bytes 1-2: Engine RPM (big-endian, /4)
             uint16_t rpmRaw = (message[1] << 8) | message[2];
-            _appData->engineRpm.update((float)(rpmRaw / 4));
+            _appData->pci.engineRpm.update((float)(rpmRaw / 4));
 
             // Bytes 3-4: Vehicle speed (big-endian, /128 = km/h)
             uint16_t speedRaw = (message[3] << 8) | message[4];
             float speedKmh = speedRaw / 128.0f;
-            _appData->vehicleSpeed.update(speedKmh);
+            _appData->pci.vehicleSpeed.update(speedKmh);
 
             // Byte 5: Engine load — inaccurate; sourced from Cummins CLIP instead
             // float loadPct = (message[5] / 255.0f) * 100.0f;
-            // _appData->engineLoad.update(loadPct);
+            // _appData->pci.engineLoad.update(loadPct);
 
             break;
         }
@@ -140,19 +140,19 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
 
             // Byte 3: Coolant temp (Celsius, offset -40)
             float coolantC = message[3] - 40.0f;
-            _appData->coolantTemp.update(coolantC);
+            _appData->pci.coolantTemp.update(coolantC);
 
             // Byte 1: Battery voltage (0.0625V/bit)
             float batteryV = message[1] * 0.0625f;
-            _appData->batteryVoltage.update(batteryV);
+            _appData->pci.batteryVoltage.update(batteryV);
 
             // Byte 2: Oil pressure (0.5 PSI/bit → kPa)
             float oilKpa = message[2] * 0.5f * 6.895f;
-            _appData->oilPressure.update(oilKpa);
+            _appData->pci.oilPressure.update(oilKpa);
 
             // Byte 4: Intake air temp (Celsius, offset -40)
             float intakeC = message[4] - 40.0f;
-            _appData->intakeAirTemp.update(intakeC);
+            _appData->pci.intakeAirTemp.update(intakeC);
 
             break;
         }
@@ -163,7 +163,7 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
 
             // Byte 1: Ambient temp (Celsius, offset -70)
             float ambientC = message[1] - 70.0f;
-            _appData->ambientTemp.update(ambientC);
+            _appData->pci.ambientTemp.update(ambientC);
 
             break;
         }
@@ -186,12 +186,12 @@ void PciBus::onMessageReceived(uint8_t* message, uint8_t messageLength) {
 
             if (offset >= 0 && messageLength >= (uint8_t)(2 + count)) {
                 char vin[18];
-                _appData->vin.read(vin, 18);
+                _appData->pci.vin.read(vin, 18);
                 for (int i = 0; i < count && (offset + i) < 17; i++) {
                     vin[offset + i] = (char)message[2 + i];
                 }
                 vin[17] = '\0';
-                _appData->vin.update(vin);
+                _appData->pci.vin.update(vin);
             }
             break;
         }

@@ -12,88 +12,158 @@
 #include "engine-hours-truck-lifetime.h"
 #include "serial-commands.h"
 
-#define DEBUG_PRINT_INTERVAL_MS 2000
+#define DEBUG_PRINT_INTERVAL_MS 1000
 #define BUS_HEALTH_PCI_MS       2000
 #define BUS_HEALTH_J1939_MS     10000
 #define BUS_HEALTH_CUMMINS_MS   5000
 
 AppData OctDomain::appData = {
-    .engineRpm = {0.0f, "RPM"},
-    .engineTorque = {0.0f, "%"},
-    .vehicleSpeed = {0.0f, "km/h"},
-    .engineHoursSinceRebuild = {0.0f, "hours"},
+    .ecu = {
+        .engineRpm                     = {0.0f, "RPM"},
+        .engineTorqueMode              = {0.0f, ""},
+        .driverDemandTorque            = {0.0f, "%"},
+        .engineTorque                  = {0.0f, "%"},
+        .accelPedal1LowIdleSwitch      = {0.0f, ""},
+        .accelPedalKickdownSwitch      = {0.0f, ""},
+        .roadSpeedLimitStatus          = {0.0f, ""},
+        .accelPedal2LowIdleSwitch      = {0.0f, ""},
+        .appsPercent                   = {0.0f, "%"},
+        .engineLoad                    = {0.0f, "%"},
+        .coolantTemp                   = {0.0f, "C"},
+        .fuelTemp                      = {0.0f, "C"},
+        .oilTemp                       = {0.0f, "C"},
+        .intakeAirTemp                 = {0.0f, "C"},
+        .oilPressure                   = {0.0f, "kPa"},
+        .batteryVoltage                = {0.0f, "V"},
+        .ambientTemp                   = {0.0f, "C"},
+    },
+    .pci = {
+        .engineRpm      = {0.0f, "RPM"},
+        .vehicleSpeed   = {0.0f, "km/h"},
+        .coolantTemp    = {0.0f, "C"},
+        .batteryVoltage = {0.0f, "V"},
+        .oilPressure    = {0.0f, "kPa"},
+        .intakeAirTemp  = {0.0f, "C"},
+        .ambientTemp    = {0.0f, "C"},
+        .vin            = {{'\0'}, "VIN"},
+    },
+    .turbo1 = {
+        .turboOilTemp   = {0.0f, "C"},
+    },
+    .engineHoursSinceRebuild  = {0.0f, "hours"},
     .engineHoursTruckLifetime = {0.0f, "hours"},
-    .vin = {{'\0'}, "VIN"},
-    .coolantTemp = {0.0f, "C"},
-    .batteryVoltage = {0.0f, "V"},
-    .ambientTemp = {0.0f, "C"},
-    .engineLoad = {0.0f, "%"},
-    .appsPercent = {0.0f, "%"},
-    .oilPressure = {0.0f, "kPa"},
-    .intakeAirTemp = {0.0f, "C"}
 };
 
 static elapsedMillis sinceDebugPrint;
 
+// Print a FloatValue with staleness marker. Shows "--" if never received,
+// the value with "?" if stale, or just the value if fresh.
+static void printVal(FloatValue& fv, uint32_t staleMs, int decimals) {
+    if (!fv.hasValue) {
+        Serial.print("--");
+        return;
+    }
+    float v;
+    fv.read(v);
+    Serial.print(v, decimals);
+    if (fv.isStale(staleMs)) Serial.print("?");
+}
+
 static void debugPrint() {
-    float rpm, speed, battery, ambient, load, apps, oilP, intakeT, hoursSR, hoursTL;
-    OctDomain::appData.engineRpm.read(rpm);
-    OctDomain::appData.vehicleSpeed.read(speed);
-    OctDomain::appData.batteryVoltage.read(battery);
-    OctDomain::appData.ambientTemp.read(ambient);
-    OctDomain::appData.engineLoad.read(load);
-    OctDomain::appData.appsPercent.read(apps);
-    OctDomain::appData.oilPressure.read(oilP);
-    OctDomain::appData.intakeAirTemp.read(intakeT);
+    Serial.print("ECU | RPM:");
+    printVal(OctDomain::appData.ecu.engineRpm, 500, 0);
+    Serial.print(" TM:");
+    printVal(OctDomain::appData.ecu.engineTorqueMode, 500, 0);
+    Serial.print(" DDTrq:");
+    printVal(OctDomain::appData.ecu.driverDemandTorque, 500, 0);
+    Serial.print("% Trq:");
+    printVal(OctDomain::appData.ecu.engineTorque, 500, 0);
+    Serial.print("% APPS:");
+    printVal(OctDomain::appData.ecu.appsPercent, 500, 1);
+    Serial.print("% Ld:");
+    printVal(OctDomain::appData.ecu.engineLoad, 500, 1);
+    Serial.print("% P1Li:");
+    printVal(OctDomain::appData.ecu.accelPedal1LowIdleSwitch, 500, 0);
+    Serial.print(" KD:");
+    printVal(OctDomain::appData.ecu.accelPedalKickdownSwitch, 500, 0);
+    Serial.print(" RSL:");
+    printVal(OctDomain::appData.ecu.roadSpeedLimitStatus, 500, 0);
+    Serial.print(" P2Li:");
+    printVal(OctDomain::appData.ecu.accelPedal2LowIdleSwitch, 500, 0);
+    Serial.print(" | CLT:");
+    printVal(OctDomain::appData.ecu.coolantTemp, 3000, 1);
+    Serial.print("C Fuel:");
+    printVal(OctDomain::appData.ecu.fuelTemp, 3000, 1);
+    Serial.print("C OilT:");
+    printVal(OctDomain::appData.ecu.oilTemp, 3000, 1);
+    Serial.print("C TrbOil:");
+    printVal(OctDomain::appData.turbo1.turboOilTemp, 3000, 1);
+    Serial.print("C IAT:");
+    printVal(OctDomain::appData.ecu.intakeAirTemp, 3000, 1);
+    Serial.print("C | OilP:");
+    printVal(OctDomain::appData.ecu.oilPressure, 3000, 0);
+    Serial.print("kPa Batt:");
+    printVal(OctDomain::appData.ecu.batteryVoltage, 3000, 2);
+    Serial.print("V Amb:");
+    printVal(OctDomain::appData.ecu.ambientTemp, 3000, 1);
+    Serial.println("C");
+
+    float pRpm, spd, pClt, pBatt, pOil, pIat, pAmb;
+    OctDomain::appData.pci.engineRpm.read(pRpm);
+    OctDomain::appData.pci.vehicleSpeed.read(spd);
+    OctDomain::appData.pci.coolantTemp.read(pClt);
+    OctDomain::appData.pci.batteryVoltage.read(pBatt);
+    OctDomain::appData.pci.oilPressure.read(pOil);
+    OctDomain::appData.pci.intakeAirTemp.read(pIat);
+    OctDomain::appData.pci.ambientTemp.read(pAmb);
+
+    Serial.print("PCI | RPM:");
+    Serial.print(pRpm, 0);
+    Serial.print(" Spd:");
+    Serial.print(spd, 1);
+    Serial.print("km/h | CLT:");
+    Serial.print(pClt, 1);
+    Serial.print("C IAT:");
+    Serial.print(pIat, 1);
+    Serial.print("C Batt:");
+    Serial.print(pBatt, 2);
+    Serial.print("V Oil:");
+    Serial.print(pOil, 0);
+    Serial.print("kPa Amb:");
+    Serial.print(pAmb, 1);
+    Serial.print("C");
+    char vin[18];
+    OctDomain::appData.pci.vin.read(vin, 18);
+    if (vin[0] != '\0') {
+        Serial.print(" VIN:");
+        Serial.print(vin);
+    }
+    Serial.println();
+
+    float hoursSR, hoursTL;
     OctDomain::appData.engineHoursSinceRebuild.read(hoursSR);
     OctDomain::appData.engineHoursTruckLifetime.read(hoursTL);
     float odo = Odometer::km();
 
-    Serial.print("RPM:");
-    Serial.print(rpm, 0);
-    Serial.print(" | Spd:");
-    Serial.print(speed, 1);
-    Serial.print("km/h | Batt:");
-    Serial.print(battery, 2);
-    Serial.print("V | Ambient:");
-    Serial.print(ambient, 1);
-    Serial.print("C | Load:");
-    Serial.print(load, 1);
-    Serial.print("% | APPS:");
-    Serial.print(apps, 1);
-    Serial.print("% | Oil:");
-    Serial.print(oilP, 0);
-    Serial.print("kPa | IAT:");
-    Serial.print(intakeT, 1);
-    Serial.print("C | Odo:");
-    Serial.print(odo, 1);
-    Serial.print("km | HrsSR:");
-    Serial.print(hoursSR, 1);
-    Serial.print(" | HrsTL:");
-    Serial.print(hoursTL, 1);
+    static const char* BC_STATE_NAMES[] = {"IDLE","WAIT_0A","WAIT_07","WAIT_05","ENABLED","CHECK_PROT"};
+    uint8_t bcState = Cm848BroadcastController::state();
 
-    char vin[18];
-    OctDomain::appData.vin.read(vin, 18);
-    if (vin[0] != '\0') {
-        Serial.print(" | VIN:");
-        Serial.print(vin);
-    }
-
-    Serial.print(" | PCI:");
+    Serial.print("SYS | PCI:");
     Serial.print((PciBus::sinceLastRx < BUS_HEALTH_PCI_MS) ? "GOOD" : "BAD");
     Serial.print(" J1939:");
     Serial.print((J1939Bus::sinceLastRx < BUS_HEALTH_J1939_MS) ? "GOOD" : "BAD");
     Serial.print(" CUMMINS:");
     Serial.print((CumminsBus::sinceLastRx < BUS_HEALTH_CUMMINS_MS) ? "GOOD" : "BAD");
-
-    static const char* BC_STATE_NAMES[] = {"IDLE","WAIT_0A","WAIT_07","WAIT_05","ENABLED","CHECK_PROT"};
-    uint8_t bcState = Cm848BroadcastController::state();
-    Serial.print(" | BC:");
+    Serial.print(" BC:");
     Serial.print(bcState < 6 ? BC_STATE_NAMES[bcState] : "?");
     Serial.print(" EEC1:");
     Serial.print(Cm848BroadcastController::msSinceEec1());
-    Serial.print("ms");
-
+    Serial.print("ms | Odo:");
+    Serial.print(odo, 1);
+    Serial.print("km HrsSR:");
+    Serial.print(hoursSR, 1);
+    Serial.print(" HrsTL:");
+    Serial.print(hoursTL, 1);
     Serial.println();
 }
 

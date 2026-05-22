@@ -7,7 +7,7 @@
 #include "app-data.h"
 #include "j1939-source-address-handler.h"
 
-// EEC1, CCVS values come from PCI — stale if PCI goes quiet
+// CCVS speed value comes from PCI — stale if PCI goes quiet
 #define STALE_FAST_MS 500
 
 // TP BAM state machine for multi-packet responses
@@ -31,15 +31,15 @@ class J1939Bus {
     private:
         static AppData* _appData;
         static TpBamState _tp;
-        static elapsedMillis _since100msBroadcast;   // EEC1, CCVS
+        static elapsedMillis _since100msBroadcast;   // CCVS
         static elapsedMillis _since1sBroadcast;      // VD, EH
 
-        static void broadcastEEC1();
-        static void broadcastCCVS();
-        static void broadcastVD();
-        static void broadcastHighResolutionVehicleDistance();
-        static void broadcastEH();
-        static void broadcastRebuildInformation();
+        static void broadcast65265();
+        static void broadcast65262();
+        static void broadcast65248();
+        static void broadcast65217();
+        static void broadcast65253();
+        static void broadcast65173();
         static void processTpBam();
         static void startTpBam(uint32_t pgn, const uint8_t* data, uint8_t len);
         static void onReceive(const CAN_message_t &msg);

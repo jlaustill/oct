@@ -97,9 +97,9 @@ void J1939Bus::broadcast65270() {
     msg.len = 8;
     memset(msg.buf, 0xFF, 8);
 
-    if (!_appData->ecu.boostPressure.isStale(5000)) {
+    if (!_appData->ecu.manifoldPressure.isStale(5000)) {
         float kpa;
-        _appData->ecu.boostPressure.read(kpa);
+        _appData->ecu.manifoldPressure.read(kpa);
         msg.buf[1] = (uint8_t)(kpa / 2.0f);
     }
 

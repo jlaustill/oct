@@ -94,7 +94,7 @@ bool Cm848J1939Receiver::onReceive(const CAN_message_t &msg, volatile AppData *a
         // IC1 — Inlet/Exhaust Conditions 1 (500ms)
         // SPN 102: Engine Intake Manifold #1 Pressure, byte 1, 2 kPa/bit
         if (SPN_VALID8(msg.buf[1]))
-            appData->ecu.boostPressure.update(msg.buf[1] * 2.0f);
+            appData->ecu.manifoldPressure.update(msg.buf[1] * 2.0f);
         // SPN 105: Intake Manifold 1 Temperature, byte 2, 1°C/bit, -40°C offset
         if (SPN_VALID8(msg.buf[2]))
             appData->ecu.intakeAirTemp.update((float)msg.buf[2] - 40.0f);
@@ -129,14 +129,12 @@ bool Cm848J1939Receiver::onReceive(const CAN_message_t &msg, volatile AppData *a
     case 65269:
     {
         // AMB — Ambient Conditions (1000ms)
-        // SPN 171: Ambient Air Temperature, bytes 3-4 LE, 0.03125°C/bit, -273.15°C offset
-        // Confirmed from firmware: barometric at buf[0], cab temp NA at buf[1-2], ambient at buf[3-4]
-        uint16_t raw = (uint16_t)msg.buf[3] | ((uint16_t)msg.buf[4] << 8);
-        if (SPN_VALID16(raw))
-        {
-            // sensor lives after the air filter but before the turbo
-            appData->ecu.ambientTemp.update(raw * 0.03125f - 273.15f);
-        }
+        // SPN 108: J1939-71 calls this "Barometric Pressure" but on CM848 the sensor is
+        // post-air-filter, pre-turbo — actual intake pressure, not barometric. buf[0], 0.5 kPa/bit.
+        // All other bytes (cab temp, ambient temp, road temp) are 0xFF — ECU does not send them.
+        if (SPN_VALID8(msg.buf[0]))
+            appData->ecu.intakePressure.update(msg.buf[0] * 0.5f);
+        return false;
         break;
     }
 

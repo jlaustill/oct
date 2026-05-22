@@ -32,11 +32,11 @@ AppData OctDomain::appData = {
         .coolantTemp                   = {0.0f, "C"},
         .fuelTemp                      = {0.0f, "C"},
         .oilTemp                       = {0.0f, "C"},
-        .boostPressure                 = {0.0f, "kPa"},
+        .manifoldPressure              = {0.0f, "kPa"},
         .intakeAirTemp                 = {0.0f, "C"},
         .oilPressure                   = {0.0f, "kPa"},
         .batteryPotential              = {0.0f, "V"},
-        .ambientTemp                   = {0.0f, "C"},
+        .intakePressure                = {0.0f, "kPa"},
     },
     .pci = {
         .engineRpm      = {0.0f, "RPM"},
@@ -110,15 +110,15 @@ static void debugPrint() {
     printVal(OctDomain::appData.turbo1.turboOilPressure, 3000, 0);
     Serial.print("kPa IAT:");
     printVal(OctDomain::appData.ecu.intakeAirTemp, 3000, 1);
-    Serial.print("C Bst:");
-    printVal(OctDomain::appData.ecu.boostPressure, 3000, 0);
+    Serial.print("C ManP:");
+    printVal(OctDomain::appData.ecu.manifoldPressure, 3000, 0);
+    Serial.print("kPa IntP:");
+    printVal(OctDomain::appData.ecu.intakePressure, 3000, 0);
     Serial.print("kPa | OilP:");
     printVal(OctDomain::appData.ecu.oilPressure, 3000, 0);
     Serial.print("kPa BattP:");
     printVal(OctDomain::appData.ecu.batteryPotential, 3000, 2);
-    Serial.print("V Amb:");
-    printVal(OctDomain::appData.ecu.ambientTemp, 3000, 1);
-    Serial.println("C");
+    Serial.println("V");
 
     float pRpm, spd, pClt, pBatt, pOil, pIat, pAmb;
     OctDomain::appData.pci.engineRpm.read(pRpm);

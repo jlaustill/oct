@@ -121,12 +121,14 @@ struct EcuData {
     FloatValue coolantTemp;     // ET1 PGN 65262 SPN 110, 1s
     FloatValue fuelTemp;        // ET1 PGN 65262 SPN 174, 1s
     FloatValue oilTemp;         // ET1 PGN 65262 SPN 175, 1s
-    FloatValue boostPressure;   // IC1 PGN 65270 SPN 102, 500ms
-    FloatValue intakeAirTemp;   // IC1 PGN 65270 SPN 105, 500ms
-    FloatValue oilPressure;     // EFL/P1 PGN 65263, 500ms
+    FloatValue manifoldPressure; // IC1 PGN 65270 SPN 102, 500ms (post-CAC, pre-intake valves)
+    FloatValue intakeAirTemp;    // IC1 PGN 65270 SPN 105, 500ms
+    FloatValue oilPressure;      // EFL/P1 PGN 65263, 500ms
     // SPN 168 measures potential at the ECM input, NOT terminal voltage — these differ under load.
     FloatValue batteryPotential; // VEP1 PGN 65271 SPN 168, 1s
-    FloatValue ambientTemp;     // AMB PGN 65269, 1s
+    // J1939-71 labels SPN 108 "Barometric Pressure" but on CM848 this sensor is post-air-filter,
+    // pre-turbo — it measures intake pressure, not barometric pressure.
+    FloatValue intakePressure;   // AMB PGN 65269 SPN 108, 1s (post-air-filter, pre-turbo)
 };
 
 // Data received from the PCI (J1850 VPW) bus

@@ -24,7 +24,17 @@ class CumminsBus {
         static elapsedMillis _rawLogTimer;
         static uint32_t _rawLogDurationMs;
         static void sendClipRequest(uint32_t addr, uint8_t len);
+        static void sendRTS();
+        static void sendDTs();
+        static void sendCTS();
+        static void sendEomAck();
+        static void advanceWakeup();
         static void onReceive(const CAN_message_t &msg);
+        static elapsedMillis _sinceWakeup;
+        static uint8_t _wakeupState;
+        static uint8_t _timerBytes[3];
+        static uint32_t _wakeupStateDelay;
+        static volatile uint8_t _pendingAction;
 };
 
 #endif // CUMMINS_BUS_H

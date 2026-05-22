@@ -1,5 +1,7 @@
 #include "cummins-bus.h"
 #include "cm848-broadcast-controller.h"
+#include "cm848-j1939-receiver.h"
+#include "j1939-bus.h"
 
 // CLIP Service 0x4A: Cummins proprietary memory-read protocol.
 // Tool address 0xF9 (Calterm/Insite), no address claiming required on this bus.
@@ -316,6 +318,12 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
     sinceLastRx = 0;
 
     Cm848BroadcastController::onReceive(msg);
+
+    // Parse J1939 broadcasts from ECU and relay them to the J1939 bus (CAN3)
+    if (Cm848J1939Receiver::onReceive(msg, _appData)) {
+        J1939Bus::J1939BusCan.write(msg);
+        return;
+    }
 
     // Only log CLIP protocol frames — ECU J1939 broadcasts flood serial at 100ms intervals
     if (msg.id == CLIP_RESPONSE_ID || msg.id == TP_CM_RX_ID || msg.id == TP_DT_RX_ID) {

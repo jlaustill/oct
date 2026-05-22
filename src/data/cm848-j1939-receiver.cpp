@@ -121,7 +121,7 @@ bool Cm848J1939Receiver::onReceive(const CAN_message_t &msg, volatile AppData *a
         uint16_t raw = (uint16_t)msg.buf[4] | ((uint16_t)msg.buf[5] << 8);
         if (SPN_VALID16(raw))
         {
-            appData->ecu.batteryVoltage.update(raw * 0.05f);
+            appData->ecu.batteryPotential.update(raw * 0.05f);
         }
         break;
     }

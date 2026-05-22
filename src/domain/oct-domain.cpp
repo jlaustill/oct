@@ -35,7 +35,7 @@ AppData OctDomain::appData = {
         .boostPressure                 = {0.0f, "kPa"},
         .intakeAirTemp                 = {0.0f, "C"},
         .oilPressure                   = {0.0f, "kPa"},
-        .batteryVoltage                = {0.0f, "V"},
+        .batteryPotential              = {0.0f, "V"},
         .ambientTemp                   = {0.0f, "C"},
     },
     .pci = {
@@ -114,8 +114,8 @@ static void debugPrint() {
     printVal(OctDomain::appData.ecu.boostPressure, 3000, 0);
     Serial.print("kPa | OilP:");
     printVal(OctDomain::appData.ecu.oilPressure, 3000, 0);
-    Serial.print("kPa Batt:");
-    printVal(OctDomain::appData.ecu.batteryVoltage, 3000, 2);
+    Serial.print("kPa BattP:");
+    printVal(OctDomain::appData.ecu.batteryPotential, 3000, 2);
     Serial.print("V Amb:");
     printVal(OctDomain::appData.ecu.ambientTemp, 3000, 1);
     Serial.println("C");

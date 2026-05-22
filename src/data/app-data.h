@@ -124,7 +124,8 @@ struct EcuData {
     FloatValue boostPressure;   // IC1 PGN 65270 SPN 102, 500ms
     FloatValue intakeAirTemp;   // IC1 PGN 65270 SPN 105, 500ms
     FloatValue oilPressure;     // EFL/P1 PGN 65263, 500ms
-    FloatValue batteryVoltage;  // VEP1 PGN 65271, 1s
+    // SPN 168 measures potential at the ECM input, NOT terminal voltage — these differ under load.
+    FloatValue batteryPotential; // VEP1 PGN 65271 SPN 168, 1s
     FloatValue ambientTemp;     // AMB PGN 65269, 1s
 };
 

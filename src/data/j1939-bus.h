@@ -37,6 +37,7 @@ class J1939Bus {
 
         static void broadcast65265();
         static void broadcast65270();
+        static void broadcast65263();
         static void broadcast65262();
         static void broadcast65248();
         static void broadcast65217();

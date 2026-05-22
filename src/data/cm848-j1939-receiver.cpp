@@ -106,11 +106,11 @@ bool Cm848J1939Receiver::onReceive(const CAN_message_t &msg, volatile AppData *a
     case 65263:
     {
         // EFL/P1 — Engine Fluid Level/Pressure 1 (500ms)
-        // SPN 100: Engine Oil Pressure, byte 4, 4 kPa/bit
-        if (SPN_VALID8(msg.buf[4]))
-        {
-            appData->ecu.oilPressure.update((float)msg.buf[4] * 4.0f);
-        }
+        // SPN 100: Engine Oil Pressure, byte 3, 4 kPa/bit
+        if (SPN_VALID8(msg.buf[3]))
+            appData->ecu.oilPressure.update(msg.buf[3] * 4.0f);
+        // OCT rebroadcasts a composite EFL/P1 merging ECU oil pressure with turbo lift pump pressure
+        return false;
         break;
     }
 

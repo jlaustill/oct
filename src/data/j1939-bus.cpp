@@ -41,6 +41,7 @@ void J1939Bus::loop() {
     if (_since500msBroadcast >= 500) {
         _since500msBroadcast = 0;
         broadcast65270();
+        broadcast65263();
     }
 
     if (_since1sBroadcast >= BROADCAST_1S_INTERVAL) {
@@ -50,6 +51,37 @@ void J1939Bus::loop() {
         broadcast65217();
         broadcast65253();
     }
+}
+
+// PGN 65263 - EFL/P1 (500ms). Composite: ECU oil pressure (primary), turbo oil pressure (fallback).
+// SPN 94:  buf[0], lift pump pressure from turbo controller, 4 kPa/bit
+// SPN 100: buf[3], oil pressure — ECU if fresh, else turbo controller, 4 kPa/bit
+void J1939Bus::broadcast65263() {
+    if (_appData == nullptr) return;
+
+    CAN_message_t msg;
+    msg.id = 0x18FEEF00;
+    msg.flags.extended = true;
+    msg.len = 8;
+    memset(msg.buf, 0xFF, 8);
+
+    if (!_appData->turbo1.turboLiftPumpPressure.isStale(5000)) {
+        float kpa;
+        _appData->turbo1.turboLiftPumpPressure.read(kpa);
+        msg.buf[0] = (uint8_t)(kpa / 4.0f);
+    }
+
+    if (!_appData->ecu.oilPressure.isStale(5000)) {
+        float kpa;
+        _appData->ecu.oilPressure.read(kpa);
+        msg.buf[3] = (uint8_t)(kpa / 4.0f);
+    } else if (!_appData->turbo1.turboOilPressure.isStale(5000)) {
+        float kpa;
+        _appData->turbo1.turboOilPressure.read(kpa);
+        msg.buf[3] = (uint8_t)(kpa / 4.0f);
+    }
+
+    J1939BusCan.write(msg);
 }
 
 // PGN 65270 - IC1 (500ms). Composite: ECU boost/IAT + turbo controller EGT.
@@ -318,7 +350,8 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
             case 65262:  broadcast65262();  break;
             case 65265:  broadcast65265();  break;
             case 65270:  broadcast65270();  break;
-            case 65248:  broadcast65248();   break;
+            case 65263:  broadcast65263();  break;
+            case 65248:  broadcast65248();  break;
             case 65217:  broadcast65217(); break;
             case 65253:  broadcast65253();   break;
             case 65173:  broadcast65173();  break;
@@ -355,10 +388,12 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
                 break;
             }
             case 65263: {
-                // EFL/P1 from turbo controller — SPN 94 lift pump pressure, byte 0, 4 kPa/bit
+                // EFL/P1 from turbo controller — SPN 94 lift pump (byte 0), SPN 100 oil pressure (byte 3), 4 kPa/bit
                 if (src != 0x00) {
                     if (msg.buf[0] < 0xFEu)
                         _appData->turbo1.turboLiftPumpPressure.update(msg.buf[0] * 4.0f);
+                    if (msg.buf[3] < 0xFEu)
+                        _appData->turbo1.turboOilPressure.update(msg.buf[3] * 4.0f);
                 }
                 break;
             }

@@ -52,6 +52,7 @@ AppData OctDomain::appData = {
         .turboOilTemp            = {0.0f, "C"},
         .turboEgt                = {0.0f, "C"},
         .turboLiftPumpPressure   = {0.0f, "kPa"},
+        .turboOilPressure        = {0.0f, "kPa"},
     },
     .engineHoursSinceRebuild  = {0.0f, "hours"},
     .engineHoursTruckLifetime = {0.0f, "hours"},
@@ -105,6 +106,8 @@ static void debugPrint() {
     printVal(OctDomain::appData.turbo1.turboEgt, 3000, 0);
     Serial.print("C LftP:");
     printVal(OctDomain::appData.turbo1.turboLiftPumpPressure, 3000, 0);
+    Serial.print("kPa TrbOilP:");
+    printVal(OctDomain::appData.turbo1.turboOilPressure, 3000, 0);
     Serial.print("kPa IAT:");
     printVal(OctDomain::appData.ecu.intakeAirTemp, 3000, 1);
     Serial.print("C Bst:");

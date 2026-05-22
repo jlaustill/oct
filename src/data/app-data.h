@@ -142,9 +142,10 @@ struct PciData {
 
 // Data received from turbo controllers on J1939
 struct TurboData {
-    FloatValue turboOilTemp;          // ET1  PGN 65262 SPN 176, 100ms
-    FloatValue turboEgt;              // IC1  PGN 65270 SPN 173, 100ms (turbine inlet)
+    FloatValue turboOilTemp;          // ET1    PGN 65262 SPN 176, 100ms
+    FloatValue turboEgt;              // IC1    PGN 65270 SPN 173, 100ms (turbine inlet)
     FloatValue turboLiftPumpPressure; // EFL/P1 PGN 65263 SPN 94,  100ms
+    FloatValue turboOilPressure;      // EFL/P1 PGN 65263 SPN 100, 100ms
 };
 
 struct AppData {

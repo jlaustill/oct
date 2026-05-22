@@ -10,6 +10,7 @@ AppData* J1939Bus::_appData = nullptr;
 TpBamState J1939Bus::_tp = {};
 elapsedMillis J1939Bus::sinceLastRx;
 elapsedMillis J1939Bus::_since100msBroadcast;
+elapsedMillis J1939Bus::_since500msBroadcast;
 elapsedMillis J1939Bus::_since1sBroadcast;
 
 void J1939Bus::setup(AppData* appData) {
@@ -24,6 +25,7 @@ void J1939Bus::setup(AppData* appData) {
     J1939BusCan.onReceive(onReceive);
 
     _since100msBroadcast = 0;
+    _since500msBroadcast = 0;
     _since1sBroadcast = 0;
 }
 
@@ -36,6 +38,11 @@ void J1939Bus::loop() {
         broadcast65265();
     }
 
+    if (_since500msBroadcast >= 500) {
+        _since500msBroadcast = 0;
+        broadcast65270();
+    }
+
     if (_since1sBroadcast >= BROADCAST_1S_INTERVAL) {
         _since1sBroadcast = 0;
         broadcast65262();
@@ -43,6 +50,42 @@ void J1939Bus::loop() {
         broadcast65217();
         broadcast65253();
     }
+}
+
+// PGN 65270 - IC1 (500ms). Composite: ECU boost/IAT + turbo controller EGT.
+// SPN 102: buf[1], boost pressure, 2 kPa/bit
+// SPN 105: buf[2], intake air temp, 1°C/bit, -40°C offset
+// SPN 173: buf[4-5], turbine inlet EGT, 0.03125°C/bit, -273°C offset
+void J1939Bus::broadcast65270() {
+    if (_appData == nullptr) return;
+
+    CAN_message_t msg;
+    msg.id = 0x18FEF600;
+    msg.flags.extended = true;
+    msg.len = 8;
+    memset(msg.buf, 0xFF, 8);
+
+    if (!_appData->ecu.boostPressure.isStale(5000)) {
+        float kpa;
+        _appData->ecu.boostPressure.read(kpa);
+        msg.buf[1] = (uint8_t)(kpa / 2.0f);
+    }
+
+    if (!_appData->ecu.intakeAirTemp.isStale(5000)) {
+        float iat;
+        _appData->ecu.intakeAirTemp.read(iat);
+        msg.buf[2] = (uint8_t)(iat + 40.0f);
+    }
+
+    if (!_appData->turbo1.turboEgt.isStale(5000)) {
+        float egt;
+        _appData->turbo1.turboEgt.read(egt);
+        uint16_t raw = (uint16_t)((egt + 273.0f) * 32.0f);
+        msg.buf[4] = raw & 0xFF;
+        msg.buf[5] = (raw >> 8) & 0xFF;
+    }
+
+    J1939BusCan.write(msg);
 }
 
 // PGN 65262 - ET1 (1s).
@@ -273,7 +316,8 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
                 break;
             }
             case 65262:  broadcast65262();  break;
-            case 65265:  broadcast65265(); break;
+            case 65265:  broadcast65265();  break;
+            case 65270:  broadcast65270();  break;
             case 65248:  broadcast65248();   break;
             case 65217:  broadcast65217(); break;
             case 65253:  broadcast65253();   break;

@@ -98,6 +98,8 @@ bool Cm848J1939Receiver::onReceive(const CAN_message_t &msg, volatile AppData *a
         // SPN 105: Intake Manifold 1 Temperature, byte 2, 1°C/bit, -40°C offset
         if (SPN_VALID8(msg.buf[2]))
             appData->ecu.intakeAirTemp.update((float)msg.buf[2] - 40.0f);
+        // OCT rebroadcasts a composite IC1 merging ECU boost/IAT with turbo EGT
+        return false;
         break;
     }
 

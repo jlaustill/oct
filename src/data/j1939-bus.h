@@ -32,9 +32,11 @@ class J1939Bus {
         static AppData* _appData;
         static TpBamState _tp;
         static elapsedMillis _since100msBroadcast;   // CCVS
+        static elapsedMillis _since500msBroadcast;   // IC1
         static elapsedMillis _since1sBroadcast;      // VD, EH
 
         static void broadcast65265();
+        static void broadcast65270();
         static void broadcast65262();
         static void broadcast65248();
         static void broadcast65217();

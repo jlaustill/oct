@@ -301,6 +301,23 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
                 }
                 break;
             }
+            case 65270: {
+                // IC1 from turbo controller — SPN 173 turbine inlet EGT, buf[4-5] LE, 0.03125°C/bit, -273°C offset
+                if (src != 0x00) {
+                    uint16_t raw = (uint16_t)msg.buf[4] | ((uint16_t)msg.buf[5] << 8);
+                    if (raw < 0xFE00u)
+                        _appData->turbo1.turboEgt.update(raw * 0.03125f - 273.0f);
+                }
+                break;
+            }
+            case 65263: {
+                // EFL/P1 from turbo controller — SPN 94 lift pump pressure, byte 0, 4 kPa/bit
+                if (src != 0x00) {
+                    if (msg.buf[0] < 0xFEu)
+                        _appData->turbo1.turboLiftPumpPressure.update(msg.buf[0] * 4.0f);
+                }
+                break;
+            }
         }
     }
 

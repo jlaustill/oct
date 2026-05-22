@@ -84,6 +84,7 @@ bool Cm848J1939Receiver::onReceive(const CAN_message_t &msg, volatile AppData *a
         {
             appData->ecu.coolantTemp.update((float)msg.buf[0] - 40.0f);
         }
+        // The ecu is sending some bad data, so we will broadcast this one with our cleaned data
         return false;
         break;
     }
@@ -91,12 +92,12 @@ bool Cm848J1939Receiver::onReceive(const CAN_message_t &msg, volatile AppData *a
     case 65270:
     {
         // IC1 — Inlet/Exhaust Conditions 1 (500ms)
-        // SPN 105: Intake Manifold 1 Temperature, byte 3, 1°C/bit, -40°C offset
-        if (SPN_VALID8(msg.buf[3]))
-        {
-            // manifold temp sensor lives after the CAC but before the intake valves
-            appData->ecu.intakeAirTemp.update((float)msg.buf[3] - 40.0f);
-        }
+        // SPN 102: Engine Intake Manifold #1 Pressure, byte 1, 2 kPa/bit
+        if (SPN_VALID8(msg.buf[1]))
+            appData->ecu.boostPressure.update(msg.buf[1] * 2.0f);
+        // SPN 105: Intake Manifold 1 Temperature, byte 2, 1°C/bit, -40°C offset
+        if (SPN_VALID8(msg.buf[2]))
+            appData->ecu.intakeAirTemp.update((float)msg.buf[2] - 40.0f);
         break;
     }
 

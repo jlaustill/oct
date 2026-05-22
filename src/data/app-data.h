@@ -121,7 +121,8 @@ struct EcuData {
     FloatValue coolantTemp;     // ET1 PGN 65262 SPN 110, 1s
     FloatValue fuelTemp;        // ET1 PGN 65262 SPN 174, 1s
     FloatValue oilTemp;         // ET1 PGN 65262 SPN 175, 1s
-    FloatValue intakeAirTemp;   // ET1 PGN 65262 SPN 52 / IC1 PGN 65270, 500ms-1s
+    FloatValue boostPressure;   // IC1 PGN 65270 SPN 102, 500ms
+    FloatValue intakeAirTemp;   // IC1 PGN 65270 SPN 105, 500ms
     FloatValue oilPressure;     // EFL/P1 PGN 65263, 500ms
     FloatValue batteryVoltage;  // VEP1 PGN 65271, 1s
     FloatValue ambientTemp;     // AMB PGN 65269, 1s
@@ -141,7 +142,9 @@ struct PciData {
 
 // Data received from turbo controllers on J1939
 struct TurboData {
-    FloatValue turboOilTemp;    // ET1 PGN 65262 SPN 176, 1s
+    FloatValue turboOilTemp;          // ET1  PGN 65262 SPN 176, 100ms
+    FloatValue turboEgt;              // IC1  PGN 65270 SPN 173, 100ms (turbine inlet)
+    FloatValue turboLiftPumpPressure; // EFL/P1 PGN 65263 SPN 94,  100ms
 };
 
 struct AppData {

@@ -32,6 +32,7 @@ AppData OctDomain::appData = {
         .coolantTemp                   = {0.0f, "C"},
         .fuelTemp                      = {0.0f, "C"},
         .oilTemp                       = {0.0f, "C"},
+        .boostPressure                 = {0.0f, "kPa"},
         .intakeAirTemp                 = {0.0f, "C"},
         .oilPressure                   = {0.0f, "kPa"},
         .batteryVoltage                = {0.0f, "V"},
@@ -48,7 +49,9 @@ AppData OctDomain::appData = {
         .vin            = {{'\0'}, "VIN"},
     },
     .turbo1 = {
-        .turboOilTemp   = {0.0f, "C"},
+        .turboOilTemp            = {0.0f, "C"},
+        .turboEgt                = {0.0f, "C"},
+        .turboLiftPumpPressure   = {0.0f, "kPa"},
     },
     .engineHoursSinceRebuild  = {0.0f, "hours"},
     .engineHoursTruckLifetime = {0.0f, "hours"},
@@ -98,9 +101,15 @@ static void debugPrint() {
     printVal(OctDomain::appData.ecu.oilTemp, 3000, 1);
     Serial.print("C TrbOil:");
     printVal(OctDomain::appData.turbo1.turboOilTemp, 3000, 1);
-    Serial.print("C IAT:");
+    Serial.print("C EGT:");
+    printVal(OctDomain::appData.turbo1.turboEgt, 3000, 0);
+    Serial.print("C LftP:");
+    printVal(OctDomain::appData.turbo1.turboLiftPumpPressure, 3000, 0);
+    Serial.print("kPa IAT:");
     printVal(OctDomain::appData.ecu.intakeAirTemp, 3000, 1);
-    Serial.print("C | OilP:");
+    Serial.print("C Bst:");
+    printVal(OctDomain::appData.ecu.boostPressure, 3000, 0);
+    Serial.print("kPa | OilP:");
     printVal(OctDomain::appData.ecu.oilPressure, 3000, 0);
     Serial.print("kPa Batt:");
     printVal(OctDomain::appData.ecu.batteryVoltage, 3000, 2);

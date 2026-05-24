@@ -84,6 +84,8 @@ void SerialCommands::handleLine(const char* line) {
             PciBus::startRawLog(15000);
         } else if (strcmp(value, "clipRaw") == 0) {
             CumminsBus::startRawLog(10000);
+        } else if (strcmp(value, "dbwStatus") == 0) {
+            CumminsBus::startDbwStatus();
         } else if (strcmp(value, "help") == 0) {
             Serial.println("Serial commands:");
             Serial.println("  odometer=<km>                    — set total vehicle distance");
@@ -92,6 +94,7 @@ void SerialCommands::handleLine(const char* line) {
             Serial.println("  log=J1939Nodes                   — print known J1939 nodes");
             Serial.println("  log=pciRaw                       — dump raw bytes for PCI msgs (15s)");
             Serial.println("  log=clipRaw                      — dump raw Cummins CLIP responses (10s)");
+            Serial.println("  log=dbwStatus                    — read J1939 drive-by-wire governor addresses");
             Serial.println("  log=help                         — print this help");
         } else {
             Serial.print("CMD: unknown log target '");

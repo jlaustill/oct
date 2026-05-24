@@ -35,6 +35,26 @@
 #define WA_CTS_RXED       3  // ECU acknowledged our RTS with CTS
 #define WA_EOM_RXED       4  // ECU acknowledged our DTs with EOM
 
+// Drive-by-wire diagnostic addresses (Phase 1 investigation — read live values)
+static const uint32_t DBW_ADDRS[] = {
+    0x003fd5a2,  // j1939_governor_config_flags (word) — config gate, bit 0x40 = J1939 gov enabled
+    0x003fd902,  // j1939_governor_feature_byte (byte) — secondary feature flags
+    0x003fee00,  // ram0x003fee00 (byte) — runtime engage flag, set=1 by governor_cruise_engage_check
+    0x0040b558,  // j1939_tsc1_active_flag (word) — TSC1 active state
+    0x0040b512,  // governor_fuel_mode_status_bit (word) — set by CLIP auth handshake
+    0x003faa70,  // j1939_governor_speed_demand (word) — current J1939 speed target (×0.125 rpm)
+};
+static const uint8_t DBW_LENS[]  = { 2, 1, 1, 2, 2, 2 };
+static const char* DBW_LABELS[]  = {
+    "j1939_governor_config_flags",
+    "j1939_governor_feature_byte",
+    "governor_engage_flag       ",
+    "j1939_tsc1_active_flag     ",
+    "governor_fuel_mode_status  ",
+    "j1939_governor_speed_demand",
+};
+static const uint8_t DBW_COUNT = sizeof(DBW_ADDRS) / sizeof(DBW_ADDRS[0]);
+
 // Discovery addresses polled when raw log is active (includes APPS and LOAD)
 static const uint32_t DISC_ADDRS[] = {
     0x0040BD86,  // throttle_position_demand (word)
@@ -55,6 +75,7 @@ uint8_t CumminsBus::_pollIdx = 0;
 bool CumminsBus::_rawLogActive = false;
 elapsedMillis CumminsBus::_rawLogTimer;
 uint32_t CumminsBus::_rawLogDurationMs = 0;
+bool CumminsBus::_dbwActive = false;
 elapsedMillis CumminsBus::_sinceWakeup;
 uint8_t CumminsBus::_wakeupState = WS_IDLE;
 uint8_t CumminsBus::_timerBytes[3] = {0, 0, 0};
@@ -101,7 +122,15 @@ void CumminsBus::loop() {
 
     if (_sincePoll >= CLIP_POLL_MS) {
         _sincePoll = 0;
-        if (_rawLogActive) {
+        if (_dbwActive) {
+            sendClipRequest(DBW_ADDRS[_pollIdx], DBW_LENS[_pollIdx]);
+            _pollIdx++;
+            if (_pollIdx >= DBW_COUNT) {
+                _dbwActive = false;
+                _pollIdx = 0;
+                Serial.println("DBW status read complete.");
+            }
+        } else if (_rawLogActive) {
             sendClipRequest(DISC_ADDRS[_pollIdx], DISC_LENS[_pollIdx]);
             _pollIdx = (_pollIdx + 1) % DISC_COUNT;
         } else {
@@ -133,6 +162,12 @@ void CumminsBus::startRawLog(uint32_t durationMs) {
     Serial.println("  [2] 0x003FA764 sensor_diag_accel_shifted_a (dword high)");
     Serial.println("  [3] 0x0040BD4E engine_load_input_value (word)");
     Serial.println("  [4] 0x0040B1F0 engine_load_percent (word, reference)");
+}
+
+void CumminsBus::startDbwStatus() {
+    _dbwActive = true;
+    _pollIdx = 0;
+    Serial.println("DBW status — reading J1939 governor addresses:");
 }
 
 // CTS in reply to ECU's RTS: allow 2 packets starting at seq 1
@@ -377,6 +412,34 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
                   | ((uint32_t)msg.buf[3] << 8)  |  msg.buf[4];
     uint8_t len = msg.buf[5];
     if (len < 1) return;
+
+    // Labeled DBW status responses
+    for (uint8_t i = 0; i < DBW_COUNT; i++) {
+        if (addr == DBW_ADDRS[i] && len >= DBW_LENS[i]) {
+            uint16_t raw = (len >= 2)
+                ? ((uint16_t)msg.buf[6] << 8) | msg.buf[7]
+                : msg.buf[6];
+            Serial.print("  ");
+            Serial.print(DBW_LABELS[i]);
+            Serial.print(" 0x");
+            if (raw < 0x1000) Serial.print("0");
+            if (raw < 0x100)  Serial.print("0");
+            if (raw < 0x10)   Serial.print("0");
+            Serial.print(raw, HEX);
+            // Annotate j1939_governor_config_flags bits
+            if (addr == 0x003fd5a2) {
+                Serial.print("  [");
+                Serial.print((raw & 0x0040) ? "J1939_GOV_EN " : "j1939_gov_dis ");
+                Serial.print((raw & 0x0080) ? "MAX_SPD_EN " : "");
+                Serial.print((raw & 0x0100) ? "ALT_RAMP " : "");
+                Serial.print((raw & 0x0010) ? "PTO_EN " : "");
+                Serial.print((raw & 0x8000) ? "FUEL_RATE_EN" : "");
+                Serial.print("]");
+            }
+            Serial.println();
+            break;
+        }
+    }
 
     if (addr == CLIP_ADDR_APPS && len >= 2) {
         uint16_t raw = ((uint16_t)msg.buf[6] << 8) | msg.buf[7];

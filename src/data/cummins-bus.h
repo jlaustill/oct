@@ -12,6 +12,7 @@ class CumminsBus {
         static void loop();
         static void requestPgn(uint32_t pgn);
         static void startRawLog(uint32_t durationMs);
+        static void startDbwStatus();
         static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> CumminsBusCan;
         static volatile uint32_t msgCount;
         static elapsedMillis sinceLastRx;
@@ -23,6 +24,7 @@ class CumminsBus {
         static bool _rawLogActive;
         static elapsedMillis _rawLogTimer;
         static uint32_t _rawLogDurationMs;
+        static bool _dbwActive;
         static void sendClipRequest(uint32_t addr, uint8_t len);
         static void sendRTS();
         static void sendDTs();

@@ -25,6 +25,9 @@ class J1939Bus {
     public:
         static void setup(AppData* appData);
         static void loop();                  // owns all broadcast timing
+        static void printAllisonEtc2();      // TEMP: decode SA3 ETC2 for dashboard — remove before truck use
+        static void printAllisonDm1();       // TEMP: decode SA3 DM1 active fault codes — remove before truck use
+        static void printAllisonEtc1();      // TEMP: detect ETC1 (PGN 61442) + output shaft speed — remove before truck use
         static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> J1939BusCan;
         static elapsedMillis sinceLastRx;
 

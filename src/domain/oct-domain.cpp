@@ -54,6 +54,9 @@ AppData OctDomain::appData = {
         .turboLiftPumpPressure   = {0.0f, "kPa"},
         .turboOilPressure        = {0.0f, "kPa"},
     },
+    .transmission = {
+        .prndDisplayByte         = {0.0f, ""},
+    },
     .engineHoursSinceRebuild  = {0.0f, "hours"},
     .engineHoursTruckLifetime = {0.0f, "hours"},
 };
@@ -177,6 +180,10 @@ static void debugPrint() {
     Serial.print(" HrsTL:");
     Serial.print(hoursTL, 1);
     Serial.println();
+
+    J1939Bus::printAllisonEtc2();  // TEMP: Allison gear/range — remove before truck use
+    J1939Bus::printAllisonDm1();   // TEMP: Allison active fault codes — remove before truck use
+    J1939Bus::printAllisonEtc1();  // TEMP: Allison ETC1 / output shaft speed — remove before truck use
 }
 
 void OctDomain::setup() {
@@ -213,6 +220,7 @@ void OctDomain::loop() {
     EngineHoursSinceRebuild::loop();
     EngineHoursTruckLifetime::loop();
     J1939Bus::loop();
+    // PciBus::loop();  // DISABLED: 0x37 TX caused bus conflict — cluster freaked out
 
     if (sinceDebugPrint >= DEBUG_PRINT_INTERVAL_MS) {
         sinceDebugPrint = 0;

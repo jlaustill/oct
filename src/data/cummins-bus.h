@@ -37,6 +37,10 @@ class CumminsBus {
         static uint8_t _timerBytes[3];
         static uint32_t _wakeupStateDelay;
         static volatile uint8_t _pendingAction;
+        // ETC1-on-ECU-bus snoop counters (transmission speed-source investigation)
+        static volatile uint32_t _ecuEtc1Count;
+        static volatile uint8_t _ecuEtc1LastSa;
+        static volatile uint16_t _ecuEtc1LastSpeed;
 };
 
 #endif // CUMMINS_BUS_H

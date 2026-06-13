@@ -1,9 +1,45 @@
 #include "j1939-bus.h"
 #include "domain/odometer.h"
+#include "cummins-bus.h"   // to forward Allison (SA 3) frames onto the ECU/Cummins bus
 
 #define BROADCAST_100MS_INTERVAL 100   // EEC1, CCVS
 #define BROADCAST_1S_INTERVAL    1000  // VD, EH
 #define TP_BAM_INTERPACKET_MS    50
+
+// TEMP: J1939 bus inventory — remove before truck use.
+struct InvEntry { uint32_t id; uint8_t len; uint8_t buf[8]; };
+static InvEntry s_inv[64];
+static uint8_t s_invCount = 0;
+static uint32_t s_sa3Forwarded = 0;   // count of Allison (SA 3) frames relayed to the ECU bus
+static elapsedMillis s_invSinceDump;
+
+// TEMP: Allison gear/range decode helpers — remove before truck use.
+// Numeric gear (SPN 523/524): 0xFB=Park, 0x7C=R, 0x7D=N, 0x7E..0x83=1..6.
+static void printGearLabel(uint8_t b) {
+    Serial.print("0x");
+    if (b < 0x10) Serial.print("0");
+    Serial.print(b, HEX);
+    Serial.print("(");
+    if (b == 0xFB) Serial.print("P");
+    else if (b == 0x7C) Serial.print("R");
+    else if (b == 0x7D) Serial.print("N");
+    else if (b >= 0x7E && b <= 0x83) Serial.print(b - 0x7D);  // 1..6
+    else Serial.print("?");
+    Serial.print(")");
+}
+
+// Range fields (SPN 162/163) are ASCII — first byte is the P/R/N/D char.
+static void printRangeChar(uint8_t b) {
+    if (b >= 0x20 && b <= 0x7E) {
+        Serial.print("'");
+        Serial.print((char)b);
+        Serial.print("'");
+    } else {
+        Serial.print("0x");
+        if (b < 0x10) Serial.print("0");
+        Serial.print(b, HEX);
+    }
+}
 
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> J1939Bus::J1939BusCan;
 AppData* J1939Bus::_appData = nullptr;
@@ -29,9 +65,129 @@ void J1939Bus::setup(AppData* appData) {
     _since1sBroadcast = 0;
 }
 
+// TEMP: decode Allison ETC2 (PGN 61445, SA 3) from the inventory table. Remove before truck use.
+void J1939Bus::printAllisonEtc2() {
+    for (uint8_t i = 0; i < s_invCount; i++) {
+        uint32_t id = s_inv[i].id;
+        if ((id & 0xFF) == 3 && ((id >> 8) & 0xFFFF) == 0xF005) {
+            Serial.print("ALLISON | ETC2 SelGear=");
+            printGearLabel(s_inv[i].buf[0]);
+            Serial.print(" CurGear=");
+            printGearLabel(s_inv[i].buf[3]);
+            Serial.print(" ReqRange=");
+            printRangeChar(s_inv[i].buf[4]);
+            Serial.print(" CurRange=");
+            printRangeChar(s_inv[i].buf[6]);
+            // Show what OCT is broadcasting to the cluster (PCI 0x37).
+            Serial.print("  -> PRND TX:");
+            if (_appData != nullptr && !_appData->transmission.prndDisplayByte.isStale(2000)) {
+                float d;
+                _appData->transmission.prndDisplayByte.read(d);
+                uint8_t b = (uint8_t)d;
+                Serial.print(b == 0x01 ? "P" : b == 0x02 ? "R" : b == 0x03 ? "N" : b == 0x05 ? "D" : "?");
+            } else {
+                Serial.print("BLANK");
+            }
+            Serial.println();
+            return;
+        }
+    }
+    Serial.println("ALLISON | ETC2 not seen");
+}
+
+// TEMP: decode Allison DM1 (PGN 65226, SA 3) active fault codes. Remove before truck use.
+// DM1 byte layout: [0]=lamp status, [1]=lamp flash, [2-5]=first DTC (SPN+FMI+OC).
+void J1939Bus::printAllisonDm1() {
+    for (uint8_t i = 0; i < s_invCount; i++) {
+        uint32_t id = s_inv[i].id;
+        if ((id & 0xFF) == 3 && ((id >> 8) & 0xFFFF) == 0xFECA) {
+            const uint8_t* b = s_inv[i].buf;
+            uint32_t spn = (uint32_t)b[2] | ((uint32_t)b[3] << 8) | (((uint32_t)(b[4] & 0xE0)) << 11);
+            uint8_t fmi = b[4] & 0x1F;
+            uint8_t oc  = b[5] & 0x7F;
+            Serial.print("ALLISON | DM1 lamps=0x");
+            if (b[0] < 0x10) Serial.print("0");
+            Serial.print(b[0], HEX);
+            if (spn == 0 && fmi == 0) {
+                Serial.println(" — no active DTC");
+            } else {
+                Serial.print(" ACTIVE DTC SPN=");
+                Serial.print(spn);
+                Serial.print(" FMI=");
+                Serial.print(fmi);
+                Serial.print(" OC=");
+                Serial.println(oc);
+            }
+            return;
+        }
+    }
+    Serial.println("ALLISON | DM1 not broadcast (TCM reports no active faults)");
+}
+
+// TEMP: detect ETC1 (PGN 61442) on the public J1939 bus and decode output shaft
+// speed. This is the signal the Cummins ECU needs for cruise; we want to know if
+// the Allison TCM already broadcasts it and from which SA. Remove before truck use.
+// ETC1 layout: byte1 status bits, bytes 2-3 SPN191 output shaft speed (0.125 rpm/bit,
+// little-endian), byte 8 SPN1482 source addr of controlling device.
+void J1939Bus::printAllisonEtc1() {
+    for (uint8_t i = 0; i < s_invCount; i++) {
+        uint32_t id = s_inv[i].id;
+        if (((id >> 16) & 0xFF) == 0xF0 && ((id >> 8) & 0xFF) == 0x02) {
+            const uint8_t* b = s_inv[i].buf;
+            uint16_t shaftRaw = (uint16_t)b[1] | ((uint16_t)b[2] << 8);
+            Serial.print("ALLISON | ETC1 seen from SA=0x");
+            uint8_t sa = id & 0xFF;
+            if (sa < 0x10) Serial.print("0");
+            Serial.print(sa, HEX);
+            Serial.print(" outputShaftSpeed=");
+            if (shaftRaw >= 0xFB00) Serial.print("N/A");
+            else { Serial.print((float)shaftRaw * 0.125f, 1); Serial.print("rpm"); }
+            Serial.print(" lockup=");
+            Serial.print((b[0] >> 2) & 0x03);
+            Serial.print(" shiftInProc=");
+            Serial.print((b[0] >> 4) & 0x03);
+            Serial.print(" ctrlSA=0x");
+            if (b[7] < 0x10) Serial.print("0");
+            Serial.println(b[7], HEX);
+            return;
+        }
+    }
+    Serial.println("ALLISON | ETC1 (PGN 61442) NOT broadcast — ECU has no shaft-speed source");
+}
+
 void J1939Bus::loop() {
     J1939BusCan.events();
     processTpBam();
+
+    // TEMP: dump bus inventory every 5s. Remove before truck use.
+    if (s_invSinceDump >= 5000) {
+        s_invSinceDump = 0;
+        Serial.print("=== J1939 inventory (");
+        Serial.print(s_invCount);
+        Serial.print(" unique frames, SA3->ECU forwarded=");
+        Serial.print(s_sa3Forwarded);
+        Serial.println(") ===");
+        for (uint8_t i = 0; i < s_invCount; i++) {
+            uint32_t id = s_inv[i].id;
+            uint8_t sa = id & 0xFF;
+            uint8_t pf = (id >> 16) & 0xFF;
+            uint8_t ps = (id >> 8) & 0xFF;
+            uint16_t pgn = (pf >= 0xF0) ? (((uint16_t)pf << 8) | ps) : ((uint16_t)pf << 8);
+            Serial.print("  src=");
+            Serial.print(sa);
+            Serial.print(" PGN=");
+            Serial.print(pgn);
+            Serial.print(" id=0x");
+            Serial.print(id, HEX);
+            Serial.print(" data=");
+            for (uint8_t b = 0; b < s_inv[i].len; b++) {
+                if (s_inv[i].buf[b] < 0x10) Serial.print("0");
+                Serial.print(s_inv[i].buf[b], HEX);
+                Serial.print(" ");
+            }
+            Serial.println();
+        }
+    }
 
     if (_since100msBroadcast >= BROADCAST_100MS_INTERVAL) {
         _since100msBroadcast = 0;
@@ -320,6 +476,38 @@ void J1939Bus::processTpBam() {
 }
 
 void J1939Bus::onReceive(const CAN_message_t &msg) {
+    // TEMP: accumulate bus inventory (dumped from loop()). Remove before truck use.
+    {
+        bool found = false;
+        for (uint8_t i = 0; i < s_invCount; i++) {
+            if (s_inv[i].id == msg.id) {
+                s_inv[i].len = msg.len;
+                memcpy(s_inv[i].buf, msg.buf, 8);
+                found = true;
+                break;
+            }
+        }
+        if (!found && s_invCount < 64) {
+            s_inv[s_invCount].id = msg.id;
+            s_inv[s_invCount].len = msg.len;
+            memcpy(s_inv[s_invCount].buf, msg.buf, 8);
+            s_invCount++;
+        }
+    }
+
+    // GATEWAY (LOAD-BEARING — do not remove): forward every Allison TCM frame (source
+    // address 0x03) straight onto the ECU/Cummins bus, unmodified, the instant it arrives —
+    // so the ECU sees the transmission as if it shared the datalink (ETC1/ETC2/etc). This is
+    // what makes CRUISE CONTROL engage: post-48RE the ECU had no output-shaft-speed reference
+    // on its own bus; delivering the Allison's ETC1 here restores it.
+    // Loop-safe: Cm848J1939Receiver only relays src==0x00 back the other way, so no ping-pong.
+    // Currently forwards the WHOLE SA3 footprint unfiltered; a future pass may narrow it to the
+    // specific PGN(s) cruise needs, but must NOT delete the relay.
+    if ((msg.id & 0xFF) == 0x03) {
+        CumminsBus::CumminsBusCan.write(msg);
+        s_sa3Forwarded++;
+    }
+
     sinceLastRx = 0;
     if (J1939SourceAddressHandler::onReceive(msg)) return;
 
@@ -394,6 +582,20 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
                         _appData->turbo1.turboLiftPumpPressure.update(msg.buf[0] * 4.0f);
                     if (msg.buf[3] < 0xFEu)
                         _appData->turbo1.turboOilPressure.update(msg.buf[3] * 4.0f);
+                }
+                break;
+            }
+            case 61445: {
+                // Allison ETC2 — SPN 162 Requested Range (ASCII, byte 5 = buf[4]).
+                // Map to PCI 0x37 display byte: 'P'/'R'/'N' literal, any digit = D.
+                if (src == 3) {
+                    uint8_t range = msg.buf[4];
+                    uint8_t display = 0;
+                    if (range == 'P')      display = 0x01;
+                    else if (range == 'R') display = 0x02;
+                    else if (range == 'N') display = 0x03;
+                    else if (range >= '1' && range <= '6') display = 0x05;  // any forward range = D
+                    if (display != 0) _appData->transmission.prndDisplayByte.update((float)display);
                 }
                 break;
             }

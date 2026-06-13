@@ -143,6 +143,13 @@ struct PciData {
     StringValue vin;            // 0xF0 VIN
 };
 
+// Transmission state derived from the Allison J1939 ETC2 (PGN 61445, SA 3)
+struct TransmissionData {
+    // PCI 0x37 display byte (b1): 0x01=P, 0x02=R, 0x03=N, 0x05=D.
+    // Mapped from ETC2 Requested Range (SPN 162). Stale => cluster blanks.
+    FloatValue prndDisplayByte;
+};
+
 // Data received from turbo controllers on J1939
 struct TurboData {
     FloatValue turboOilTemp;          // ET1    PGN 65262 SPN 176, 100ms
@@ -155,6 +162,7 @@ struct AppData {
     EcuData ecu;
     PciData pci;
     TurboData turbo1;
+    TransmissionData transmission;
 
     // Engine hours are EEPROM-persisted counters, managed by their own classes
     FloatValue engineHoursSinceRebuild;

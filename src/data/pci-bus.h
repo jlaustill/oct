@@ -24,6 +24,7 @@
 class PciBus {
     public:
         static void setup(AppData* appData);
+        static void loop();                  // broadcasts 0x37 PRND from Allison ETC2
         static void startRawLog(uint32_t durationMs);
         static void sendShiftLever(uint8_t gearByte);
         static volatile uint32_t msgCount;

@@ -29,6 +29,26 @@ void PciBus::sendShiftLever(uint8_t gearByte) {
     VPW.write(msg, sizeof(msg));
 }
 
+// PARKED 2026-06-10: PCI 0x37 PRND transmit from the Allison-derived gear.
+// Does NOT work on this truck — the cluster sources PRND from the hardwired range
+// selector, not a received 0x37; transmitting it corrupts the PCI bus (dash freaked
+// out). Revisit via the hardwired-selector-emulation approach.
+// See docs/superpowers/specs/2026-06-10-allison-etc2-prnd-translation-design.md.
+// #define PRND_TX_INTERVAL_MS 100
+// #define PRND_STALE_MS       2000
+// static elapsedMillis _sincePrndTx;
+
+void PciBus::loop() {
+    // Parked — see note above. Restore the body below when revisiting.
+    // if (_appData == nullptr) return;
+    // if (_sincePrndTx < PRND_TX_INTERVAL_MS) return;
+    // _sincePrndTx = 0;
+    // if (_appData->transmission.prndDisplayByte.isStale(PRND_STALE_MS)) return;
+    // float display;
+    // _appData->transmission.prndDisplayByte.read(display);
+    // sendShiftLever((uint8_t)display);
+}
+
 void PciBus::startRawLog(uint32_t durationMs) {
     _rawLogDurationMs = durationMs;
     _rawLogTimer = 0;

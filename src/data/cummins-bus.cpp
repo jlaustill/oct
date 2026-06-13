@@ -43,8 +43,12 @@ static const uint32_t DBW_ADDRS[] = {
     0x0040b558,  // j1939_tsc1_active_flag (word) — TSC1 active state
     0x0040b512,  // governor_fuel_mode_status_bit (word) — set by CLIP auth handshake
     0x003faa70,  // j1939_governor_speed_demand (word) — current J1939 speed target (×0.125 rpm)
+    // Cruise/transmission speed-source investigation (48RE→Allison):
+    0x003fdda6,  // drivetrain_type (enum) — 0=STANDALONE 1=MANUAL_VSS 3=MANUAL_TPU 4=AUTO_J1939_FULL 5=AUTO_J1939_ETC1
+    0x0005a470,  // j1939_tsc1_auth_primary_sa (word) — source addr the ECU trusts for ETC1/TSC1 (flash; may not be readable)
+    0x0040a2ae,  // output_shaft_speed_current (word) — latest ETC1 SPN191 the ECU has; 0/stale = no road-speed reference
 };
-static const uint8_t DBW_LENS[]  = { 2, 1, 1, 2, 2, 2 };
+static const uint8_t DBW_LENS[]  = { 2, 1, 1, 2, 2, 2, 2, 2, 2 };
 static const char* DBW_LABELS[]  = {
     "j1939_governor_config_flags",
     "j1939_governor_feature_byte",
@@ -52,6 +56,9 @@ static const char* DBW_LABELS[]  = {
     "j1939_tsc1_active_flag     ",
     "governor_fuel_mode_status  ",
     "j1939_governor_speed_demand",
+    "drivetrain_type            ",
+    "tsc1_auth_primary_sa       ",
+    "output_shaft_speed_current ",
 };
 static const uint8_t DBW_COUNT = sizeof(DBW_ADDRS) / sizeof(DBW_ADDRS[0]);
 
@@ -81,6 +88,9 @@ uint8_t CumminsBus::_wakeupState = WS_IDLE;
 uint8_t CumminsBus::_timerBytes[3] = {0, 0, 0};
 uint32_t CumminsBus::_wakeupStateDelay = 0;
 volatile uint8_t CumminsBus::_pendingAction = WA_NONE;
+volatile uint32_t CumminsBus::_ecuEtc1Count = 0;
+volatile uint8_t CumminsBus::_ecuEtc1LastSa = 0;
+volatile uint16_t CumminsBus::_ecuEtc1LastSpeed = 0;
 
 void CumminsBus::setup(AppData* appData) {
     _appData = appData;
@@ -168,6 +178,19 @@ void CumminsBus::startDbwStatus() {
     _dbwActive = true;
     _pollIdx = 0;
     Serial.println("DBW status — reading J1939 governor addresses:");
+    // Report whether the ECU has heard ANY ETC1 on its own datalink since boot.
+    Serial.print("  ETC1-on-ECU-bus frames since boot: ");
+    Serial.print(_ecuEtc1Count);
+    if (_ecuEtc1Count == 0) {
+        Serial.println("  <-- ECU receives NO transmission output-shaft-speed (48RE gap)");
+    } else {
+        Serial.print(" (last SA=0x");
+        if (_ecuEtc1LastSa < 0x10) Serial.print("0");
+        Serial.print(_ecuEtc1LastSa, HEX);
+        Serial.print(", shaft speed=");
+        Serial.print((float)_ecuEtc1LastSpeed * 0.125f, 1);
+        Serial.println(" rpm)");
+    }
 }
 
 // CTS in reply to ECU's RTS: allow 2 packets starting at seq 1
@@ -347,6 +370,15 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
     msgCount++;
     sinceLastRx = 0;
 
+    // ETC1 (PGN 61442 = PF 0xF0, PS 0x02) snoop on the ECU's own datalink.
+    // If the ECU never hears ETC1 here, it has no transmission output-shaft-speed
+    // source (this is what the 48RE used to provide). Counter is reported by dbwStatus.
+    if (msg.flags.extended && ((msg.id >> 16) & 0xFF) == 0xF0 && ((msg.id >> 8) & 0xFF) == 0x02) {
+        _ecuEtc1Count++;
+        _ecuEtc1LastSa = msg.id & 0xFF;
+        if (msg.len >= 3) _ecuEtc1LastSpeed = (uint16_t)msg.buf[1] | ((uint16_t)msg.buf[2] << 8);
+    }
+
     Cm848BroadcastController::onReceive(msg);
 
     // Parse J1939 broadcasts from ECU and relay them to the J1939 bus (CAN3)
@@ -434,6 +466,33 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
                 Serial.print((raw & 0x0100) ? "ALT_RAMP " : "");
                 Serial.print((raw & 0x0010) ? "PTO_EN " : "");
                 Serial.print((raw & 0x8000) ? "FUEL_RATE_EN" : "");
+                Serial.print("]");
+            }
+            // Decode drivetrain_type enum (low byte holds the value)
+            else if (addr == 0x003fdda6) {
+                uint8_t dt = raw & 0xFF;
+                Serial.print("  [");
+                Serial.print(dt == 0 ? "STANDALONE" :
+                             dt == 1 ? "MANUAL_VSS" :
+                             dt == 3 ? "MANUAL_TPU" :
+                             dt == 4 ? "AUTO_J1939_FULL (needs ETC1+shaft speed)" :
+                             dt == 5 ? "AUTO_J1939_ETC1 (shift defuel only)" : "UNKNOWN");
+                Serial.print("]");
+            }
+            // ETC1/TSC1 trusted source address — the SA our spoofed ETC1 must use
+            else if (addr == 0x0005a470) {
+                Serial.print("  [expect ETC1 from SA=0x");
+                uint8_t sa = raw & 0xFF;
+                if (sa < 0x10) Serial.print("0");
+                Serial.print(sa, HEX);
+                Serial.print(sa == 0xFF ? " (WILDCARD - any SA)]" : "]");
+            }
+            // The smoking gun: output shaft speed the ECU currently has (0.125 rpm/bit)
+            else if (addr == 0x0040a2ae) {
+                Serial.print("  [");
+                Serial.print((float)raw * 0.125f, 1);
+                Serial.print(" rpm");
+                if (raw == 0) Serial.print(" (unused for cruise in MANUAL_VSS - feeds fuel-trim/protection only)");
                 Serial.print("]");
             }
             Serial.println();

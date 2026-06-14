@@ -180,10 +180,6 @@ static void debugPrint() {
     Serial.print(" HrsTL:");
     Serial.print(hoursTL, 1);
     Serial.println();
-
-    J1939Bus::printAllisonEtc2();  // TEMP: Allison gear/range — remove before truck use
-    J1939Bus::printAllisonDm1();   // TEMP: Allison active fault codes — remove before truck use
-    J1939Bus::printAllisonEtc1();  // TEMP: Allison ETC1 / output shaft speed — remove before truck use
 }
 
 void OctDomain::setup() {

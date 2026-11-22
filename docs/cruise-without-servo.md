@@ -2,7 +2,9 @@
 
 The goal: remove the cruise servo, its vacuum lines and the vacuum pump, and keep cruise control. The truck keeps its vehicle speed sensor and its steering wheel buttons.
 
-**The truck:** a 2004.5 Dodge Ram 5.9 with the CM848 ECM. An Allison LCT1000 6-speed replaces the 48RE, and OCT bridges the ECM's bus and the Allison's J1939 bus.
+**The truck:** a Dodge Ram 5.9 with the CM848 ECM. An Allison LCT1000 6-speed replaces the 48RE, and OCT bridges the ECM's bus and the Allison's J1939 bus.
+
+kuminz-re labels the firmware "CM848D 2004.5 Dodge 5.9L". Confirm the truck's model year, because the 2004 and 2005 wiring differ around the servo (see the meter test).
 
 **Firmware details:** the evidence is in [CM848 cruise control](https://github.com/jlaustill/kuminz-re/blob/main/firmware/CM848_S90140.06_analysis/docs/cruise_control.md) in kuminz-re. Its names follow kuminz-re PR #53.
 
@@ -16,21 +18,26 @@ Nothing here has been tested on the truck yet.
   - So clearing the bit makes every moment look like today's cruise-off state.
 - **The Allison still gets a fuel-based throttle during cruise.**
   - OCT relays every 8-byte PDU2 broadcast from the ECM (source 0x00) to the Allison bus unchanged: `Cm848J1939Receiver::onReceive` accepts the frame and `CumminsBus` writes it to `J1939Bus`. EEC2 goes through that path.
-  - The ECM fills EEC2's accelerator pedal position (SPN 91) from its equivalent throttle: the throttle that would give the current fuel. It does that with or without the servo.
+  - The ECM fills EEC2's accelerator pedal position (SPN 91) from its equivalent throttle: the throttle that would give the current fuel.
+  - The firmware review found the ECM does that with or without the servo. Only one reader has checked the middle of that calculation so far.
 - **The swap's cruise fix stays in place.** OCT's gateway (`J1939Bus::onReceive`) forwards every Allison frame (source 0x03) to the ECM. The Allison's ETC1 output shaft speed is what lets cruise engage (commit 829c146). Removing the servo doesn't touch that path.
 
 ## The calibration change
 
-1. Change EEPROM 0x170 from `0x11dc` to `0x11cc`.
+1. Change EEPROM word 0x170 from `0x11dc` to `0x11cc`. The word is big-endian, so only the byte at 0x171 changes (`0xdc` to `0xcc`).
 2. Fix the CRC16 at EEPROM 0x482. A mismatch sets P0602.
 
-Check whether HP Tuners updates the CRC for you.
+Check whether HP Tuners updates the CRC for you. To compute it yourself you'll need the algorithm. It's in `cm848_verifyCalibrationAndCodeCrc` in kuminz-re, but neither doc spells it out yet.
 
 ## Before you start
 
 ### Check the stored codes
 
-Look for P0572 or P0573 in the history. The ECM builds a second brake signal from the servo supply's feedback line, raw switch 28. It reads that line raw whenever its supply output is off, which today is any time cruise isn't engaged. A clean history says that path already works on this harness.
+Look for P0572 or P0573 in the history. The ECM builds a second brake signal from the servo supply's feedback line, raw switch 28. It reads that line raw whenever its supply output is off, which today is any time cruise isn't engaged.
+
+What a clean history tells you depends on whether cruise engages today:
+- **If it does,** the switch is learned and the brake pair monitor is running. A clean history then says that path already works on this harness.
+- **If the switch is unlearned,** the monitor clears both codes every pass, so a clean history tells you nothing.
 
 ### Meter test on circuit V32 (18 vt/yl)
 

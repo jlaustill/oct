@@ -25,9 +25,13 @@ Nothing here has been tested on the truck yet.
 ## The calibration change
 
 1. Change EEPROM word 0x170 from `0x11dc` to `0x11cc`. The word is big-endian, so only the byte at 0x171 changes (`0xdc` to `0xcc`).
-2. Fix the CRC16 at EEPROM 0x482. A mismatch sets P0602.
+2. Set the CRC word at EEPROM 0x482 to the CRC of EEPROM 0x118 to 0x171. A mismatch sets P0602.
 
-Check whether HP Tuners updates the CRC for you. To compute it yourself you'll need the algorithm. It's in `cm848_verifyCalibrationAndCodeCrc` in kuminz-re, but neither doc spells it out yet.
+**The CRC algorithm.** CRC-16/KERMIT: reflected polynomial 0x8408, initial value 0, no final XOR.
+- Over 0x118 to 0x171 it reproduces the stored `0x5e0e` in the dumps.
+- With only step 1's change, the new value is `0x4e8f`.
+- If anything else in that block differs on the truck, recompute it.
+- Check whether HP Tuners updates the CRC for you.
 
 ## Before you start
 

@@ -337,7 +337,8 @@ void J1939Bus::onReceive(const CAN_message_t &msg) {
     if (J1939SourceAddressHandler::onReceive(msg)) return;
 
     J1939Message j1939;
-    j1939.setCanId(msg.id);
+    J1939_init(&j1939);
+    J1939_setCanId(&j1939, msg.id);
 
     // Handle PGN 59904 (Request) - PDU Format 0xEA
     if (j1939.pduFormat == 0xEA && msg.len >= 3) {

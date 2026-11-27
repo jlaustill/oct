@@ -4,7 +4,7 @@
 #define CLIP_TX_ID       0x18EF00F9
 #define CLIP_RX_ID       0x18EFF900
 #define EEC1_CAN_ID      0x0CF00400   // PGN 61444, priority 3, src=ECU(0x00)
-#define PROT_FLAGS_ADDR  0x0040ADEE   // protection_condition_flags — bits 2/3 gate broadcasts
+#define PROT_FLAGS_ADDR  0x0040ADEE   // datalink_broadcast_enable_flags — bits 2/3 = J1939-71 engine+retarder broadcast enables
 
 #define STEP_WAIT_MS     200    // inter-service delay (ECU needs time to process)
 #define PROT_TIMEOUT_MS  300    // max wait for 0x4B prot-flags response
@@ -42,7 +42,7 @@ void Cm848BroadcastController::loop() {
             sendEF00Service(svc, 1);
             _sinceStep = 0;
             _state = BC_WAIT_0A;
-            Serial.println("CM848BC: [1/3] 0x0a (initJ1939MessageBuffers)");
+            Serial.println("CM848BC: [1/3] 0x0a (enterDevelopmentMode)");
             break;
         }
 
@@ -52,7 +52,7 @@ void Cm848BroadcastController::loop() {
                 sendEF00Service(svc, 1);
                 _sinceStep = 0;
                 _state = BC_WAIT_07;
-                Serial.println("CM848BC: [2/3] 0x07 (enableJ1939Output)");
+                Serial.println("CM848BC: [2/3] 0x07 (exitDevelopmentMode)");
             }
             break;
 
@@ -62,7 +62,7 @@ void Cm848BroadcastController::loop() {
                 sendEF00Service(svc, 3);
                 _sinceStep = 0;
                 _state = BC_WAIT_05;
-                Serial.println("CM848BC: [3/3] 0x05 01 01 (setProtectionConditionFlags)");
+                Serial.println("CM848BC: [3/3] 0x05 01 01 (enableBroadcast: J1939-71 engine+retarder)");
             }
             break;
 

@@ -8,8 +8,8 @@
 #define CLIP_REQUEST_ID   0x18EF00F9  // priority 6, PGN 0xEF00, dest=ECU(0x00), src=tool(0xF9)
 #define CLIP_RESPONSE_ID  0x18EFF900  // priority 6, PGN 0xEF00, dest=tool(0xF9), src=ECU(0x00)
 
-#define CLIP_ADDR_APPS    0x0040a37a  // throttle_position_filtered (word)
-#define CLIP_ADDR_LOAD    0x0040B1F0  // engine_load_percent (word, raw = %)
+#define CLIP_ADDR_APPS    0x0040a37a  // 0x40a37a = egr_fraction_limited_command (NOT throttle) in current firmware; poll pending removal
+#define CLIP_ADDR_LOAD    0x0040B1F0  // 0x40b1f0 = transmission_output_speed_in_use (0.125 rpm, NOT load) in current firmware; poll pending removal
 
 #define CLIP_POLL_MS      100         // send one request every 100ms
 #define WAKEUP_INTERVAL_MS 1000
@@ -37,38 +37,38 @@
 
 // Drive-by-wire diagnostic addresses (Phase 1 investigation — read live values)
 static const uint32_t DBW_ADDRS[] = {
-    0x003fd5a2,  // j1939_governor_config_flags (word) — config gate, bit 0x40 = J1939 gov enabled
-    0x003fd902,  // j1939_governor_feature_byte (byte) — secondary feature flags
-    0x003fee00,  // ram0x003fee00 (byte) — runtime engage flag, set=1 by governor_cruise_engage_check
-    0x0040b558,  // j1939_tsc1_active_flag (word) — TSC1 active state
-    0x0040b512,  // governor_fuel_mode_status_bit (word) — set by CLIP auth handshake
-    0x003faa70,  // j1939_governor_speed_demand (word) — current J1939 speed target (×0.125 rpm)
+    0x003fd5a2,  // algorithm_enable_flags_3_cal (word): 0x40=Cruise_Control 0x80=Road_Speed_Governor 0x10=PTO 0x8000=Cruise_Save_Set_Speed
+    0x003fd902,  // feature_selection_bits_cal (word): bit0 cab PTO, bit1 remote PTO
+    0x003fee00,  // cruise_control_switches_learned_flag_cal (word)
+    0x0040b558,  // accelerator_pedal_input_fault_flag (word)
+    0x0040b512,  // immobilizer_valid_key_flag (word)
+    0x003faa70,  // engine_retarder_requested_torque (word) — retarder torque in table units, NOT a speed
     // Cruise/transmission speed-source investigation (48RE→Allison):
-    0x003fdda6,  // drivetrain_type (enum) — 0=STANDALONE 1=MANUAL_VSS 3=MANUAL_TPU 4=AUTO_J1939_FULL 5=AUTO_J1939_ETC1
-    0x0005a470,  // j1939_tsc1_auth_primary_sa (word) — source addr the ECU trusts for ETC1/TSC1 (flash; may not be readable)
+    0x003fdda6,  // vehicle_speed_sensor_type_cal (enum) — 0=none 1=inductive 2=minigen 3=tach 4=dlw/GR&OOG 5=dlw/o GR&OOG (this truck=1)
+    0x0005a470,  // j1939_transmission_source_address (word) — SA the ECU expects transmission msgs from (flash; may not be readable)
     0x0040a2ae,  // output_shaft_speed_current (word) — latest ETC1 SPN191 the ECU has; 0/stale = no road-speed reference
 };
 static const uint8_t DBW_LENS[]  = { 2, 1, 1, 2, 2, 2, 2, 2, 2 };
 static const char* DBW_LABELS[]  = {
-    "j1939_governor_config_flags",
-    "j1939_governor_feature_byte",
-    "governor_engage_flag       ",
-    "j1939_tsc1_active_flag     ",
-    "governor_fuel_mode_status  ",
-    "j1939_governor_speed_demand",
-    "drivetrain_type            ",
-    "tsc1_auth_primary_sa       ",
+    "algorithm_enable_flags_3_cal",
+    "feature_selection_bits_cal ",
+    "cruise_switches_learned_flg",
+    "accel_pedal_input_fault    ",
+    "immobilizer_valid_key_flag ",
+    "engine_retarder_req_torque ",
+    "vehicle_speed_sensor_type  ",
+    "j1939_trans_source_address ",
     "output_shaft_speed_current ",
 };
 static const uint8_t DBW_COUNT = sizeof(DBW_ADDRS) / sizeof(DBW_ADDRS[0]);
 
 // Discovery addresses polled when raw log is active (includes APPS and LOAD)
 static const uint32_t DISC_ADDRS[] = {
-    0x0040BD86,  // throttle_position_demand (word)
-    0x0040BD9E,  // throttle_position_secondary (word)
-    0x003FA764,  // sensor_diag_accel_shifted_a (dword high word, verified-readable range)
-    0x0040BD4E,  // engine_load_input_value (word)
-    0x0040B1F0,  // engine_load_percent (word, reference)
+    0x0040BD86,  // intake_manifold_temperature_sensor_value (word)
+    0x0040BD9E,  // intake_manifold_temperature_sensor_default_value (word)
+    0x003FA764,  // (unidentified in current CSVs)
+    0x0040BD4E,  // transmission_temperature_adc_forced_reading (word)
+    0x0040B1F0,  // transmission_output_speed_in_use (word, 0.125 rpm)
 };
 static const uint8_t DISC_LENS[] = { 2, 2, 2, 2, 2 };
 static const uint8_t DISC_COUNT = sizeof(DISC_ADDRS) / sizeof(DISC_ADDRS[0]);
@@ -167,11 +167,11 @@ void CumminsBus::startRawLog(uint32_t durationMs) {
     _rawLogActive = true;
     _pollIdx = 0;
     Serial.println("Cummins discovery log — polling 5 throttle candidates for 10s:");
-    Serial.println("  [0] 0x0040BD86 throttle_position_demand (word)");
-    Serial.println("  [1] 0x0040BD9E throttle_position_secondary (word)");
-    Serial.println("  [2] 0x003FA764 sensor_diag_accel_shifted_a (dword high)");
-    Serial.println("  [3] 0x0040BD4E engine_load_input_value (word)");
-    Serial.println("  [4] 0x0040B1F0 engine_load_percent (word, reference)");
+    Serial.println("  [0] 0x0040BD86 intake_manifold_temperature_sensor_value (word)");
+    Serial.println("  [1] 0x0040BD9E intake_manifold_temperature_sensor_default_value (word)");
+    Serial.println("  [2] 0x003FA764 (unidentified in current CSVs)");
+    Serial.println("  [3] 0x0040BD4E transmission_temperature_adc_forced_reading (word)");
+    Serial.println("  [4] 0x0040B1F0 transmission_output_speed_in_use (word, 0.125 rpm)");
 }
 
 void CumminsBus::startDbwStatus() {
@@ -458,25 +458,26 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
             if (raw < 0x100)  Serial.print("0");
             if (raw < 0x10)   Serial.print("0");
             Serial.print(raw, HEX);
-            // Annotate j1939_governor_config_flags bits
+            // Annotate algorithm_enable_flags_3_cal bits
             if (addr == 0x003fd5a2) {
                 Serial.print("  [");
-                Serial.print((raw & 0x0040) ? "J1939_GOV_EN " : "j1939_gov_dis ");
-                Serial.print((raw & 0x0080) ? "MAX_SPD_EN " : "");
-                Serial.print((raw & 0x0100) ? "ALT_RAMP " : "");
+                Serial.print((raw & 0x0040) ? "CRUISE_EN " : "cruise_dis ");
+                Serial.print((raw & 0x0080) ? "RSG_EN " : "");
+                Serial.print((raw & 0x0100) ? "GEAR_DOWN_PROT " : "");
                 Serial.print((raw & 0x0010) ? "PTO_EN " : "");
-                Serial.print((raw & 0x8000) ? "FUEL_RATE_EN" : "");
+                Serial.print((raw & 0x8000) ? "CRUISE_SAVE_SET" : "");
                 Serial.print("]");
             }
-            // Decode drivetrain_type enum (low byte holds the value)
+            // Decode vehicle_speed_sensor_type_cal enum (low byte holds the value)
             else if (addr == 0x003fdda6) {
                 uint8_t dt = raw & 0xFF;
                 Serial.print("  [");
-                Serial.print(dt == 0 ? "STANDALONE" :
-                             dt == 1 ? "MANUAL_VSS" :
-                             dt == 3 ? "MANUAL_TPU" :
-                             dt == 4 ? "AUTO_J1939_FULL (needs ETC1+shaft speed)" :
-                             dt == 5 ? "AUTO_J1939_ETC1 (shift defuel only)" : "UNKNOWN");
+                Serial.print(dt == 0 ? "NONE" :
+                             dt == 1 ? "INDUCTIVE" :
+                             dt == 2 ? "MINIGEN" :
+                             dt == 3 ? "TACH" :
+                             dt == 4 ? "DLW_GR_OOG (J1939 w/ gear ratio)" :
+                             dt == 5 ? "DLW_NO_GR (J1939 ETC1 only)" : "UNKNOWN");
                 Serial.print("]");
             }
             // ETC1/TSC1 trusted source address — the SA our spoofed ETC1 must use
@@ -492,7 +493,7 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
                 Serial.print("  [");
                 Serial.print((float)raw * 0.125f, 1);
                 Serial.print(" rpm");
-                if (raw == 0) Serial.print(" (unused for cruise in MANUAL_VSS - feeds fuel-trim/protection only)");
+                if (raw == 0) Serial.print(" (unused for cruise with inductive VSS - feeds fuel-trim/protection only)");
                 Serial.print("]");
             }
             Serial.println();

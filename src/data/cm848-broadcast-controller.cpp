@@ -12,11 +12,9 @@
 
 // States
 #define BC_IDLE        0
-#define BC_WAIT_0A     1
-#define BC_WAIT_07     2
-#define BC_WAIT_05     3
-#define BC_ENABLED     4
-#define BC_CHECK_PROT  5
+#define BC_WAIT_05     1
+#define BC_ENABLED     2
+#define BC_CHECK_PROT  3
 
 uint8_t           Cm848BroadcastController::_state = BC_IDLE;
 elapsedMillis     Cm848BroadcastController::_sinceStep;
@@ -37,34 +35,18 @@ void Cm848BroadcastController::enable() {
 
 void Cm848BroadcastController::loop() {
     switch (_state) {
+        // Service 5 needs neither development mode nor the security key
+        // (j1939_command_security_flags bit 5 is clear). Service 0x0a
+        // (enterDevelopmentMode) does need the key, so the plain 0x0a / 0x07
+        // pair that used to precede this was refused by the ECM.
         case BC_IDLE: {
-            uint8_t svc[] = {0x0a};
-            sendEF00Service(svc, 1);
+            uint8_t svc[] = {0x05, 0x01, 0x01};
+            sendEF00Service(svc, 3);
             _sinceStep = 0;
-            _state = BC_WAIT_0A;
-            Serial.println("CM848BC: [1/3] 0x0a (enterDevelopmentMode)");
+            _state = BC_WAIT_05;
+            Serial.println("CM848BC: 0x05 01 01 (enableBroadcast: J1939-71 engine+retarder)");
             break;
         }
-
-        case BC_WAIT_0A:
-            if (_sinceStep >= STEP_WAIT_MS) {
-                uint8_t svc[] = {0x07};
-                sendEF00Service(svc, 1);
-                _sinceStep = 0;
-                _state = BC_WAIT_07;
-                Serial.println("CM848BC: [2/3] 0x07 (exitDevelopmentMode)");
-            }
-            break;
-
-        case BC_WAIT_07:
-            if (_sinceStep >= STEP_WAIT_MS) {
-                uint8_t svc[] = {0x05, 0x01, 0x01};
-                sendEF00Service(svc, 3);
-                _sinceStep = 0;
-                _state = BC_WAIT_05;
-                Serial.println("CM848BC: [3/3] 0x05 01 01 (enableBroadcast: J1939-71 engine+retarder)");
-            }
-            break;
 
         case BC_WAIT_05:
             if (_sinceStep >= STEP_WAIT_MS) {

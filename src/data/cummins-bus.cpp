@@ -8,8 +8,6 @@
 #define CLIP_REQUEST_ID   0x18EF00F9  // priority 6, PGN 0xEF00, dest=ECU(0x00), src=tool(0xF9)
 #define CLIP_RESPONSE_ID  0x18EFF900  // priority 6, PGN 0xEF00, dest=tool(0xF9), src=ECU(0x00)
 
-#define CLIP_ADDR_APPS    0x0040a37a  // 0x40a37a = egr_fraction_limited_command (NOT throttle) in current firmware; poll pending removal
-#define CLIP_ADDR_LOAD    0x0040B1F0  // 0x40b1f0 = transmission_output_speed_in_use (0.125 rpm, NOT load) in current firmware; poll pending removal
 
 #define CLIP_POLL_MS      100         // send one request every 100ms
 #define WAKEUP_INTERVAL_MS 1000
@@ -143,9 +141,6 @@ void CumminsBus::loop() {
         } else if (_rawLogActive) {
             sendClipRequest(DISC_ADDRS[_pollIdx], DISC_LENS[_pollIdx]);
             _pollIdx = (_pollIdx + 1) % DISC_COUNT;
-        } else {
-            sendClipRequest(_pollIdx == 0 ? CLIP_ADDR_APPS : CLIP_ADDR_LOAD, 2);
-            _pollIdx = (_pollIdx + 1) % 2;
         }
     }
 }
@@ -499,13 +494,5 @@ void CumminsBus::onReceive(const CAN_message_t &msg) {
             Serial.println();
             break;
         }
-    }
-
-    if (addr == CLIP_ADDR_APPS && len >= 2) {
-        uint16_t raw = ((uint16_t)msg.buf[6] << 8) | msg.buf[7];
-        _appData->ecu.appsPercent.update((float)raw * 100.0f / 65535.0f);
-    } else if (addr == CLIP_ADDR_LOAD && len >= 2) {
-        uint16_t raw = ((uint16_t)msg.buf[6] << 8) | msg.buf[7];
-        _appData->ecu.engineLoad.update((float)raw);
     }
 }
